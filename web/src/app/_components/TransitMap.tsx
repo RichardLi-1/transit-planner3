@@ -74,20 +74,33 @@ const TRAFFIC_COLOR: Record<string, string> = {
 function NeighbourhoodPanel({
   id,
   name,
+  lat,
+  lng,
   onClose,
 }: {
   id: string;
   name: string;
+  lat: number;
+  lng: number;
   onClose: () => void;
 }) {
   const data = NEIGHBOURHOOD_DATA[id];
   const transitLines = ROUTES.filter((r) => data?.transitLines.includes(r.id));
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <div className="pointer-events-auto w-72 overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Preview image */}
       <div className="relative h-36">
-        <img src="/placeholder.png" alt="Neighbourhood view" className="h-full w-full object-cover" />
+        {!imgLoaded && (
+          <div className="absolute inset-0 animate-pulse bg-stone-200" />
+        )}
+        <img 
+          src={`/api/streetview?lat=${lat}&lng=${lng}`} 
+          alt="Neighbourhood view" 
+          className="h-full w-full object-cover" 
+          onLoad={() => setImgLoaded(true)}
+        />
         <button
           onClick={onClose}
           className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-stone-500 hover:bg-white hover:text-stone-800"
@@ -97,7 +110,7 @@ function NeighbourhoodPanel({
       </div>
 
       <div className="px-5 pt-4 pb-5 space-y-4">
-        <h2 className="text-base font-semibold text-stone-800">{name}</h2>
+        <h2 className="text-xl font-semibold text-stone-800">{name}</h2>
 
         {data ? (
           <>
@@ -413,7 +426,7 @@ export function TransitMap() {
   const [drawMode, setDrawMode] = useState<DrawMode>("normal");
   const [hasBoundary, setHasBoundary] = useState(false);
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState<Set<string>>(new Set());
-  const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string } | null>(null);
+  const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number } | null>(null);
   const genIdxRef = useRef(0);
 
   // Refs for use inside map event callbacks (avoid stale closure)
@@ -728,7 +741,7 @@ export function TransitMap() {
           });
         } else {
           // Select — show panel for clicked neighbourhood
-          setFocusedNeighbourhood({ id, name: name ?? id });
+          setFocusedNeighbourhood({ id, name: name ?? id, lat: e.lngLat.lat, lng: e.lngLat.lng });
           // Find BFS path from existing selection → new target, select everything in between
           const toAdd = findNeighbourhoodPath(current, id);
           toAdd.forEach((nid) => {
@@ -1075,6 +1088,8 @@ export function TransitMap() {
           <NeighbourhoodPanel
             id={focusedNeighbourhood.id}
             name={focusedNeighbourhood.name}
+            lat={focusedNeighbourhood.lat}
+            lng={focusedNeighbourhood.lng}
             onClose={() => setFocusedNeighbourhood(null)}
           />
         )}

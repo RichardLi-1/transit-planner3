@@ -1,0 +1,26 @@
+import { NextRequest, NextResponse} from 'next/server';
+
+export async function GET(request: NextRequest) {
+    const { searchParams } = new URL(request.url);
+    const lat = searchParams.get('lat');
+    const lng = searchParams.get('lng');
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+    const size = searchParams.get('size') || '600x300';
+    
+    if (!lat || !lng) {
+        return NextResponse.json({ error: 'Missing lat or lng parameters' }, { status: 400 });
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
+
+    const response = await fetch(url);
+    const buffer = await response.arrayBuffer();
+
+    return new NextResponse(buffer, {
+        headers: {
+            'Content-Type': 'image/jpeg',
+        },
+    });
+
+}
