@@ -523,19 +523,16 @@ export function TransitMap() {
       .then((res) => res.json())
       .then((rows: { latitude: number; longitude: number; population: number; area: number }[]) => {
         if (cancelled) return;
-        // Compute population density and normalize to 0–1 weight
+        // Compute population density (pop/area), then log-normalize to 0–1
+        // Log scale is essential because density spans several orders of magnitude
         const densities = rows.map((r) => (r.area > 0 ? r.population / r.area : 0));
-        let maxDensity = 1;
-        for (const d of densities) {
-          if (d > maxDensity) maxDensity = d;
-        }
+        const logDensities = densities.map((d) => (d > 0 ? Math.log1p(d) : 0));
+        const maxLog = Math.max(1, ...logDensities);
 
         const features: GeoJSON.Feature<GeoJSON.Point>[] = rows.map((r, i) => ({
           type: "Feature",
           properties: {
-            weight: densities[i]! / maxDensity,
-            population: r.population,
-            area: r.area,
+            weight: logDensities[i]! / maxLog,
             density: densities[i]!,
           },
           geometry: { type: "Point", coordinates: [r.longitude, r.latitude] },
@@ -795,7 +792,32 @@ export function TransitMap() {
         data: populationGeoJSON ?? { type: "FeatureCollection" as const, features: [] },
       });
 
-      // Population circle points — always visible
+      // Population heatmap — fades out as you zoom in
+      map.addLayer(
+        {
+          id: "population-heatmap",
+          type: "heatmap",
+          source: "population",
+          paint: {
+            "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 0.4, 13, 0.8],
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 10, 12, 28, 13, 50],
+            "heatmap-color": [
+              "interpolate", ["linear"], ["heatmap-density"],
+              0,    "rgba(0,0,0,0)",
+              0.2,  "rgba(0,104,55,0.15)",
+              0.4,  "rgba(102,189,99,0.5)",
+              0.6,  "rgba(255,255,51,0.8)",
+              0.8,  "rgba(253,141,60,0.9)",
+              1,    "rgba(215,25,28,1)",
+            ],
+            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 10, 0.85, 13, 0.3, 15, 0],
+          },
+        },
+        firstLabelLayer,
+      );
+
+      // Population circle points — fade in as you zoom in past the heatmap
       map.addLayer(
         {
           id: "population-points",
@@ -804,15 +826,22 @@ export function TransitMap() {
           paint: {
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
-              8, 1.5,
-              11, 3,
-              14, 6,
-              18, 12,
+              11, 2,
+              13, 4,
+              16, 8,
             ],
-            "circle-color": "#ef4444",
-            "circle-opacity": 0.6,
+            "circle-color": [
+              "interpolate", ["linear"], ["get", "weight"],
+              0,    "rgb(0,104,55)",
+              0.3,  "rgb(102,189,99)",
+              0.5,  "rgb(255,255,51)",
+              0.7,  "rgb(253,141,60)",
+              0.85, "rgb(253,141,60)",
+              1,    "rgb(215,25,28)",
+            ],
+            "circle-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 16, 0.75],
             "circle-stroke-width": 0.5,
-            "circle-stroke-color": "rgba(255,255,255,0.4)",
+            "circle-stroke-color": "rgba(255,255,255,0.5)",
           },
         },
         firstLabelLayer,
@@ -914,11 +943,14 @@ export function TransitMap() {
     };
   }, []);
 
-  // ── population points visibility toggle
+  // ── population visibility toggle (heatmap + points)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
     const vis = showHeatmap ? "visible" : "none";
+    if (map.getLayer("population-heatmap")) {
+      map.setLayoutProperty("population-heatmap", "visibility", vis);
+    }
     if (map.getLayer("population-points")) {
       map.setLayoutProperty("population-points", "visibility", vis);
     }
