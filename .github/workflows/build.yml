@@ -75,9 +75,8 @@ jobs:
           build-args: |
             NEXTAUTH_URL=${{ vars.NEXTAUTH_URL || 'https://build-placeholder.example.com' }}
             NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
-          secrets: |
-            supabase_url=${{ secrets.SUPABASE_URL }}
-            supabase_key=${{ secrets.SUPABASE_KEY }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
