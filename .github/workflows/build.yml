@@ -93,7 +93,6 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'production' || github.event.workflow_run.head_branch == 'development'))
     environment: ${{ (github.event.workflow_run.head_branch == 'production' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/production')) && 'Production' || 'Development' }}
 
     steps:
