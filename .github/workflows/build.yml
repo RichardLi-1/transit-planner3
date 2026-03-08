@@ -63,18 +63,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push web-backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.web-backend
-          push: true
-          tags: ${{ steps.meta-web-backend.outputs.tags }}
-          labels: ${{ steps.meta-web-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Build and push web image
         uses: docker/build-push-action@v5
         with:
@@ -91,6 +79,18 @@ jobs:
             NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push web-backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.web-backend
+          push: true
+          tags: ${{ steps.meta-web-backend.outputs.tags }}
+          labels: ${{ steps.meta-web-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
 
       - name: Extract metadata for server image
         id: meta-server
