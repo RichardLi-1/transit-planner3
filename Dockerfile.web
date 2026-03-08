@@ -8,11 +8,7 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci --legacy-peer-deps
 
 COPY web/ .
-RUN npx prisma generate
-# NextAuth validates NEXTAUTH_URL when NODE_ENV=production; build runs in production mode.
-# Pass via --build-arg NEXTAUTH_URL=... or use default; runtime still overrides when container runs.
-ARG NEXTAUTH_URL=https://roamad.ca
-ENV NEXTAUTH_URL=${NEXTAUTH_URL}
+
 RUN npm run build
 
 FROM node:20-alpine AS runner
