@@ -1,13 +1,8 @@
 {
-  "name": "hello-all-worlds",
+  "name": "transit-planner",
   "private": true,
   "workspaces": [
-    "web",
-    "web_db",
-    "web_utils",
-    "express_utils",
-    "express_db",
-    "express_server"
+    "web"
   ],
   "scripts": {
     "dev": "npm --workspace web run dev",
