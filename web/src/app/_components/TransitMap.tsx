@@ -787,6 +787,7 @@ export function TransitMap() {
   }, [popRawData]);
   const [hasBoundary, setHasBoundary] = useState(false);
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState<Set<string>>(new Set());
+  const [selectedStations, setSelectedStations] = useState<Set<string>>(new Set()); // "name::routeId"
   const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number; geometry: GeoJSON.Geometry | null } | null>(null);
   const genIdxRef = useRef(0);
 
@@ -803,6 +804,7 @@ export function TransitMap() {
   // Refs for use inside map event callbacks (avoid stale closure)
   const drawModeRef = useRef<DrawMode>("normal");
   const selectedNeighbourhoodsRef = useRef<Set<string>>(new Set());
+  const selectedStationsRef = useRef<Set<string>>(new Set());
   const addStationToLineRef = useRef<string | null>(null);
   const customLinesRef = useRef<Route[]>([]);
   const routeExtraStopsRef = useRef<Map<string, { name: string; coords: [number, number] }[]>>(new Map());
@@ -821,6 +823,29 @@ export function TransitMap() {
   useEffect(() => {
     selectedNeighbourhoodsRef.current = selectedNeighbourhoods;
   }, [selectedNeighbourhoods]);
+
+  useEffect(() => {
+    selectedStationsRef.current = selectedStations;
+  }, [selectedStations]);
+
+  // Update map highlight layers whenever selectedStations changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    [...ROUTES, ...customLinesRef.current].forEach((route) => {
+      const layerId = `stops-selected-${route.id}`;
+      if (!map.getLayer(layerId)) return;
+      const names = [...selectedStations]
+        .filter((k) => k.endsWith(`::${route.id}`))
+        .map((k) => k.split("::")[0]!);
+      map.setFilter(
+        layerId,
+        names.length > 0
+          ? ["in", ["get", "name"], ["literal", names]]
+          : ["==", ["get", "name"], "__none__"],
+      );
+    });
+  }, [selectedStations, mapLoaded]);
 
   useEffect(() => {
     addStationToLineRef.current = addStationToLine;
@@ -887,8 +912,8 @@ export function TransitMap() {
     } else {
       // "normal" — cancel any in-progress draw and return to view mode
       draw.changeMode("simple_select");
-      // If we were mid-draw, the in-progress polygon is discarded by MapboxDraw
-      // when switching away from draw_polygon mode.
+      setSelectedStations(new Set());
+      selectedStationsRef.current = new Set();
     }
   }
 
@@ -906,6 +931,8 @@ export function TransitMap() {
       });
     }
     setSelectedNeighbourhoods(new Set());
+    setSelectedStations(new Set());
+    selectedStationsRef.current = new Set();
     setDrawMode("normal");
     drawModeRef.current = "normal";
   }
@@ -1183,6 +1210,9 @@ export function TransitMap() {
       map.on("click", "neighbourhood-fill", (e) => {
         if (drawModeRef.current !== "select") return; // "normal" and "boundary" don't select
         if (justCompletedBoundaryRef.current) return;
+        // Station dots sit on top of neighbourhoods — let the station handler take priority
+        const stopLayers = (map.getStyle()?.layers ?? []).filter((l) => l.id.startsWith("stops-dot-")).map((l) => l.id);
+        if (stopLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: stopLayers }).length > 0) return;
         const id = e.features?.[0]?.properties?.AREA_SHORT_CODE as string | undefined;
         if (!id) return;
         const name = e.features?.[0]?.properties?.AREA_NAME as string | undefined;
@@ -1400,6 +1430,21 @@ export function TransitMap() {
         });
 
         map.addLayer({
+          id: `stops-selected-${route.id}`,
+          type: "circle",
+          source: `stops-${route.id}`,
+          minzoom: 11,
+          filter: ["==", ["get", "name"], "__none__"],
+          paint: {
+            "circle-radius": 9,
+            "circle-color": route.color,
+            "circle-opacity": 0.5,
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#ffffff",
+          },
+        });
+
+        map.addLayer({
           id: `stops-dot-${route.id}`,
           type: "circle",
           source: `stops-${route.id}`,
@@ -1426,12 +1471,20 @@ export function TransitMap() {
           setHoveredId(null);
         });
 
-        // Station dot click — show popup and open sidebar
+        // Station dot click — toggle selection in select mode, else open sidebar
         map.on("click", `stops-dot-${route.id}`, (e) => {
           if (didDragStopRef.current) { didDragStopRef.current = false; return; }
           const name = e.features?.[0]?.properties?.name as string | undefined;
           if (!name) return;
           e.originalEvent.stopPropagation();
+          if (drawModeRef.current === "select") {
+            const key = `${name}::${route.id}`;
+            const next = new Set(selectedStationsRef.current);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            selectedStationsRef.current = next;
+            setSelectedStations(new Set(next));
+            return;
+          }
           const { x, y } = e.point;
           setStationPopup({ name, routeId: route.id, x, y, coords: [e.lngLat.lng, e.lngLat.lat] });
           setSelectedRoute(route);
@@ -1708,6 +1761,7 @@ export function TransitMap() {
       map.addLayer({ id: `route-outline-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": 11, "line-opacity": 0.9 } });
       map.addLayer({ id: `route-line-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": 7, "line-opacity": 1 } });
       map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 11, paint: { "circle-radius": 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
+      map.addLayer({ id: `stops-selected-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 11, filter: ["==", ["get", "name"], "__none__"], paint: { "circle-radius": 9, "circle-color": route.color, "circle-opacity": 0.5, "circle-stroke-width": 2, "circle-stroke-color": "#ffffff" } });
       map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 11, paint: { "circle-radius": 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": 2 } });
       map.on("click", `route-line-${route.id}`, () => { setSelectedRoute(route); setSelectedStop(null); });
       map.on("mouseenter", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; map.setPaintProperty(`route-line-${route.id}`, "line-width", 10); });
@@ -1717,6 +1771,14 @@ export function TransitMap() {
         const name = e.features?.[0]?.properties?.name as string | undefined;
         if (!name) return;
         e.originalEvent.stopPropagation();
+        if (drawModeRef.current === "select") {
+          const key = `${name}::${route.id}`;
+          const next = new Set(selectedStationsRef.current);
+          if (next.has(key)) next.delete(key); else next.add(key);
+          selectedStationsRef.current = next;
+          setSelectedStations(new Set(next));
+          return;
+        }
         setStationPopup({ name, routeId: route.id, x: e.point.x, y: e.point.y, coords: [e.lngLat.lng, e.lngLat.lat] });
         setSelectedRoute(route);
         setSelectedStop(name);
@@ -1822,7 +1884,7 @@ export function TransitMap() {
   }
 
   const showGeneratedPanel = !!generatedRoute && !selectedRoute;
-  const hasSelection = hasBoundary || selectedNeighbourhoods.size > 0;
+  const hasSelection = hasBoundary || selectedNeighbourhoods.size > 0 || selectedStations.size > 0;
 
   return (
     <div className="relative h-full w-full">
@@ -2046,9 +2108,9 @@ export function TransitMap() {
         )}
 
         {/* Selection badge — absolutely anchored to the right of the toolbar, doesn't shift layout */}
-        {selectedNeighbourhoods.size > 0 && (
+        {(selectedNeighbourhoods.size > 0 || selectedStations.size > 0) && (
           <div className="pointer-events-auto absolute top-0 left-full ml-2 flex h-[52px] items-center whitespace-nowrap rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-medium text-indigo-700 shadow-sm">
-            {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""} selected
+            SELECTED: {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""}, {selectedStations.size} stop{selectedStations.size !== 1 ? "s" : ""}
           </div>
         )}
         </div>
@@ -2056,7 +2118,7 @@ export function TransitMap() {
 
       {/* Side panel — only one shown at a time to prevent overlap */}
       <div
-        className={`pointer-events-none absolute top-10 right-9 bottom-10 flex items-stretch transition-transform duration-300 ease-in-out ${
+        className={`pointer-events-none absolute right-9 bottom-10 flex items-stretch transition-all duration-300 ease-in-out ${hasSelection ? "top-20" : "top-10"} ${
           selectedRoute || showGeneratedPanel ? "translate-x-0" : "translate-x-[calc(100%+2.25rem)]"
         }`}
       >
