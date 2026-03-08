@@ -877,6 +877,9 @@ export function TransitMap() {
       selectedNeighbourhoodsRef.current = new Set();
       draw.changeMode("draw_polygon");
     } else if (mode === "select") {
+      // Exit line-edit mode when entering neighbourhood-select mode
+      setAddStationToLine(null);
+      addStationToLineRef.current = null;
       // Clear any drawn boundary when entering neighbourhood-select mode
       draw.deleteAll();
       setHasBoundary(false);
@@ -1838,7 +1841,12 @@ export function TransitMap() {
                 <li key={r.id} className="group flex items-center gap-2">
                   <button
                     title={isActive ? "Deselect line" : "Select to add stations"}
-                    onClick={() => setAddStationToLine(isActive ? null : r.id)}
+                    onClick={() => {
+                      if (!isActive) {
+                        handleSetDrawMode("normal");
+                      }
+                      setAddStationToLine(isActive ? null : r.id);
+                    }}
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded transition-all ${
                       isActive
                         ? "ring-2 ring-offset-1"
@@ -2194,6 +2202,7 @@ export function TransitMap() {
               stops: [],
             };
             setCustomLines((prev) => [...prev, newRoute]);
+            handleSetDrawMode("normal");
             setAddStationToLine(id);
             setShowNewLineModal(false);
           }}
