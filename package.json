@@ -15,11 +15,6 @@
     "build": "npm --workspace web run build",
     "lint": "npm --workspace web run lint",
     "typecheck": "npm --workspace web run typecheck",
-    "db:generate": "npm --workspace @repo/web_db run generate",
-    "db:migrate": "npm --workspace @repo/web_db run migrate",
-    "db:push": "npm --workspace @repo/web_db run push",
-    "db:studio": "npm --workspace @repo/web_db run studio",
-    "express:start": "npm --workspace express_server run start"
   },
   "packageManager": "npm@10.9.2",
   "dependencies": {

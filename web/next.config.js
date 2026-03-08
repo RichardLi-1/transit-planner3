@@ -11,7 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import("next").NextConfig} */
 const config = {
-  transpilePackages: ["@repo/web_db", "@repo/web_utils"],
   turbopack: {
     root: path.resolve(__dirname, ".."),
   },
