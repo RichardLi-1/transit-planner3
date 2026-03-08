@@ -4,9 +4,9 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChatPanel } from "./ChatPanel";
 import { haversineKm, computeStationPopulations, type PopRow } from "~/app/map/geo-utils";
 import {
-  GENERATED_ROUTES,
   ROUTES,
   type GeneratedRoute,
   type Route,
@@ -34,7 +34,10 @@ export function TransitMap() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [generatedRoute, setGeneratedRoute] = useState<GeneratedRoute | null>(null);
   const [disabledStops, setDisabledStops] = useState<Set<string>>(new Set());
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [councilOpen, setCouncilOpen] = useState(false);
+  const [councilHasRun, setCouncilHasRun] = useState(false);
+  const [councilStartNew, setCouncilStartNew] = useState(false);
+  const [councilPreview, setCouncilPreview] = useState<{ color: string; stops: { name: string; coords: [number, number] }[] } | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [isBirdsEye, setIsBirdsEye] = useState(false);
   const [showTraffic, setShowTraffic] = useState(false);
@@ -66,7 +69,7 @@ export function TransitMap() {
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState<Set<string>>(new Set());
   const [selectedStations, setSelectedStations] = useState<Set<string>>(new Set()); // "name::routeId"
   const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number; geometry: GeoJSON.Geometry | null } | null>(null);
-  const genIdxRef = useRef(0);
+
 
   // ── line-editor state
   const [addStationToLine, setAddStationToLine] = useState<string | null>(null);
@@ -149,16 +152,14 @@ export function TransitMap() {
 
 
   function handleGenerate() {
-    if (isGenerating) return;
-    setIsGenerating(true);
-    setSelectedRoute(null);
-    setTimeout(() => {
-      const route = GENERATED_ROUTES[genIdxRef.current % GENERATED_ROUTES.length]!;
-      genIdxRef.current += 1;
-      setGeneratedRoute(route);
-      setDisabledStops(new Set());
-      setIsGenerating(false);
-    }, 1200);
+    setCouncilStartNew(true);
+    setCouncilHasRun(true);
+    setCouncilOpen(true);
+  }
+
+  function handleViewCouncil() {
+    setCouncilStartNew(false);
+    setCouncilOpen(true);
   }
 
   function handleSetDrawMode(mode: DrawMode) {
@@ -189,6 +190,13 @@ export function TransitMap() {
     } else {
       // "normal" — cancel any in-progress draw and return to view mode
       draw.changeMode("simple_select");
+      if (map && mapLoaded) {
+        selectedNeighbourhoodsRef.current.forEach((id) => {
+          map.setFeatureState({ source: "neighbourhoods", id }, { selected: false });
+        });
+      }
+      setSelectedNeighbourhoods(new Set());
+      selectedNeighbourhoodsRef.current = new Set();
       setSelectedStations(new Set());
       selectedStationsRef.current = new Set();
     }
@@ -1026,14 +1034,103 @@ export function TransitMap() {
     });
   }, [routeExtraStops, mapLoaded]);
 
+  // ── council live preview layer ─────────────────────────────────────────────
+  const shimmerRafRef = useRef<number | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const SRC_LINE = "council-preview-line";
+    const SRC_DOTS = "council-preview-dots";
+    const LYR_SHADOW = "council-preview-shadow";
+    const LYR_LINE = "council-preview-lyr";
+    const LYR_SHIMMER = "council-preview-shimmer";
+    const LYR_DOTS = "council-preview-lyr-dots";
+
+    if (shimmerRafRef.current !== null) {
+      cancelAnimationFrame(shimmerRafRef.current);
+      shimmerRafRef.current = null;
+    }
+
+    if (!councilPreview || councilPreview.stops.length < 2) {
+      for (const id of [LYR_SHADOW, LYR_SHIMMER, LYR_LINE, LYR_DOTS]) {
+        if (map.getLayer(id)) map.removeLayer(id);
+      }
+      for (const id of [SRC_LINE, SRC_DOTS]) {
+        if (map.getSource(id)) map.removeSource(id);
+      }
+      return;
+    }
+
+    const coords = councilPreview.stops.map((s) => s.coords);
+    const lineGeoJSON: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} }],
+    };
+    const dotsGeoJSON: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: councilPreview.stops.map((s) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: s.coords },
+        properties: { name: s.name },
+      })),
+    };
+
+    if (map.getSource(SRC_LINE)) {
+      (map.getSource(SRC_LINE) as mapboxgl.GeoJSONSource).setData(lineGeoJSON);
+      (map.getSource(SRC_DOTS) as mapboxgl.GeoJSONSource).setData(dotsGeoJSON);
+    } else {
+      map.addSource(SRC_LINE, { type: "geojson", data: lineGeoJSON });
+      map.addSource(SRC_DOTS, { type: "geojson", data: dotsGeoJSON });
+      // Shadow glow
+      map.addLayer({ id: LYR_SHADOW, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": councilPreview.color, "line-width": 14, "line-opacity": 0.12, "line-blur": 6 } });
+      // Solid base line
+      map.addLayer({ id: LYR_LINE, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": councilPreview.color, "line-width": 5, "line-opacity": 0.75 } });
+      // Shimmer overlay — animated travelling highlight
+      map.addLayer({ id: LYR_SHIMMER, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0, "line-dasharray": [3, 30] } });
+      // Stops
+      map.addLayer({ id: LYR_DOTS, type: "circle", source: SRC_DOTS, minzoom: 10, paint: { "circle-radius": 5, "circle-color": "#fff", "circle-stroke-color": councilPreview.color, "circle-stroke-width": 2.5, "circle-opacity": 0.9 } });
+    }
+
+    // Animate shimmer: cycle a short bright dash along the line
+    const animMap = map;
+    const PERIOD = 1800; // ms per full cycle
+    const DASH = 3;
+    const GAP = 30;
+    const TOTAL = DASH + GAP;
+    let start: number | null = null;
+    function animate(ts: number) {
+      if (!start) start = ts;
+      const t = ((ts - start) % PERIOD) / PERIOD; // 0→1
+      const offset = t * TOTAL;
+      const pre = offset % TOTAL;
+      const pattern = pre < DASH
+        ? [0, pre, DASH - pre, GAP]
+        : [0, pre, DASH, GAP - (pre - DASH)];
+      if (animMap.getLayer(LYR_SHIMMER)) {
+        animMap.setPaintProperty(LYR_SHIMMER, "line-dasharray", pattern);
+        animMap.setPaintProperty(LYR_SHIMMER, "line-opacity", 0.55 + 0.2 * Math.sin(t * Math.PI * 2));
+      }
+      shimmerRafRef.current = requestAnimationFrame(animate);
+    }
+    shimmerRafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (shimmerRafRef.current !== null) cancelAnimationFrame(shimmerRafRef.current);
+    };
+  }, [councilPreview, mapLoaded]);
+
   // ── add map layers for newly created custom lines
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
     customLines.forEach((route) => {
       if (map.getSource(`route-${route.id}`)) return; // already added
-      map.addSource(`route-${route.id}`, { type: "geojson", data: routeToGeoJSON(route) });
-      map.addSource(`stops-${route.id}`, { type: "geojson", data: stopsToGeoJSON(route) });
+      // Seed with any extra stops already set (e.g. from AI route generation)
+      const seededExtra = routeExtraStopsRef.current.get(route.id) ?? [];
+      const seededStops = [...route.stops, ...seededExtra];
+      map.addSource(`route-${route.id}`, { type: "geojson", data: seededStops.length >= 2 ? routeToGeoJSON({ ...route, stops: seededStops, shape: undefined }) : routeToGeoJSON(route) });
+      map.addSource(`stops-${route.id}`, { type: "geojson", data: stopsToGeoJSON({ ...route, stops: seededStops }) });
       map.addLayer({ id: `route-shadow-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": 10, "line-opacity": 0.12, "line-blur": 4 } });
       map.addLayer({ id: `route-outline-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": 11, "line-opacity": 0.9 } });
       map.addLayer({ id: `route-line-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": 7, "line-opacity": 1 } });
@@ -1263,12 +1360,75 @@ export function TransitMap() {
         </div>
       )}
 
+      {/* Chat panel — bottom right, above zoom controls */}
+      <ChatPanel
+        open={councilOpen}
+        onClose={() => setCouncilOpen(false)}
+        startNew={councilStartNew}
+        neighbourhoodNames={
+          [...selectedNeighbourhoods].map(
+            (code) => neighbourhoodsGeoJSONRef.current?.features.find(
+              (f) => f.properties?.AREA_SHORT_CODE === code
+            )?.properties?.AREA_NAME ?? code
+          )
+        }
+        stationNames={[...selectedStations].map((s) => s.split("::")[0]!)}
+        existingLineStops={[...ROUTES, ...customLines].flatMap((r) =>
+          r.stops.map((s) => ({ name: s.name, coords: s.coords, route: r.name }))
+        )}
+        onRoutePreview={(route) => setCouncilPreview(route)}
+        onAddRoute={(parsed) => {
+          const id = `custom-${customLineCounterRef.current++}`;
+
+          // ── Estimate route stats from geometry ──────────────────────────────
+          const stops = parsed.stops;
+          let totalKm = 0;
+          for (let i = 1; i < stops.length; i++) {
+            totalKm += haversineKm(stops[i - 1]!.coords, stops[i]!.coords);
+          }
+          const costPerKm = parsed.type === "subway" ? 500 : parsed.type === "streetcar" ? 80 : 4; // $M/km
+          const costM = Math.round(totalKm * costPerKm);
+          const costStr = costM >= 1000
+            ? `$${(costM / 1000).toFixed(1)}B`
+            : `$${costM}M`;
+          const buildYears = parsed.type === "subway" ? Math.ceil(totalKm * 1.2 + 3) : parsed.type === "streetcar" ? Math.ceil(totalKm * 0.6 + 2) : Math.ceil(totalKm * 0.1 + 1);
+          const prRaw = parsed.prScore ?? 20; // /40 from council, default moderate
+          const prNorm = Math.round((prRaw / 40) * 10); // convert to /10
+          const approvalChance = Math.max(15, Math.min(92, 85 - prRaw * 1.5));
+          const minutesSaved = Math.round(totalKm * (parsed.type === "subway" ? 3.5 : 2));
+          const dollarsSaved = `$${(minutesSaved * 0.3).toFixed(1)}/trip`;
+
+          const newRoute: GeneratedRoute = {
+            id,
+            name: parsed.name,
+            shortName: parsed.name.slice(0, 2).toUpperCase(),
+            color: parsed.color,
+            textColor: "#ffffff",
+            type: parsed.type,
+            description: `AI-generated ${parsed.type} line · ${totalKm.toFixed(1)} km · ${stops.length} stops`,
+            frequency: parsed.type === "subway" ? "3 min" : parsed.type === "streetcar" ? "6 min" : "10 min",
+            stops: parsed.stops.map((s) => ({ name: s.name, coords: s.coords })),
+            stats: {
+              cost: costStr,
+              timeline: `${buildYears} years`,
+              costedTimeline: `${buildYears + 3}–${buildYears + 5} years`,
+              minutesSaved,
+              dollarsSaved,
+              percentageChance: Math.round(approvalChance),
+              prNightmareScore: prNorm,
+            },
+          };
+          setCustomLines((prev) => [...prev, newRoute]);
+          setGeneratedRoute(newRoute);
+        }}
+      />
+
       {/* Top-center toolbar */}
       <div className="pointer-events-none absolute top-5 left-0 right-0 flex justify-center gap-2">
         {/* Heatmap toggle */}
         <button
           onClick={() => setShowHeatmap((v) => !v)}
-          className={`pointer-events-auto flex h-[52px] items-center gap-3 rounded-xl border border-[#D7D7D7] bg-white px-6 text-base font-normal shadow-sm transition-all ${
+          className={`pointer-events-auto flex h-13 items-center gap-3 rounded-xl border border-[#D7D7D7] bg-white px-6 text-base font-normal shadow-sm transition-all ${
             showHeatmap ? "text-stone-700" : "text-stone-400"
           }`}
         >
@@ -1283,7 +1443,7 @@ export function TransitMap() {
         <button
           onClick={() => setShowTraffic((v) => !v)}
           disabled={trafficLoading}
-          className={`pointer-events-auto flex h-[52px] items-center gap-3 rounded-xl border border-[#D7D7D7] bg-white px-6 text-base font-normal shadow-sm transition-all disabled:cursor-wait ${
+          className={`pointer-events-auto flex h-13 items-center gap-3 rounded-xl border border-[#D7D7D7] bg-white px-6 text-base font-normal shadow-sm transition-all disabled:cursor-wait ${
             showTraffic ? "text-stone-700" : "text-stone-400"
           }`}
         >
@@ -1300,79 +1460,99 @@ export function TransitMap() {
 
         {/* Draw toolbar — wrapped in relative so the badge can anchor to it */}
         <div className="relative">
-        <div className="pointer-events-auto flex h-[52px] items-center gap-1 rounded-xl border border-[#D7D7D7] bg-white px-2 shadow-sm">
+        <div className="pointer-events-auto flex h-13 items-center gap-1 rounded-xl border border-[#D7D7D7] bg-white px-2 shadow-sm">
           {/* Normal (default/view — no active tool) */}
-          <button
-            onClick={() => handleSetDrawMode("normal")}
-            title="Normal"
-            className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-              drawMode === "normal" ? "bg-stone-100 text-stone-900" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
-            }`}
-          >
-            {/* Arrow cursor */}
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-[18px] w-[18px]">
-              <path d="M4 1.5 L4 17 L8 13 L11 19 L13 18 L10 12 L16 12 Z" />
-            </svg>
-          </button>
+          <div className="group relative">
+            <button
+              onClick={() => handleSetDrawMode("normal")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+                drawMode === "normal" ? "bg-stone-100 text-stone-900" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
+              }`}
+            >
+              {/* Arrow cursor */}
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4.5 w-4.5">
+                <path d="M4 1.5 L4 17 L8 13 L11 19 L13 18 L10 12 L16 12 Z" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Normal mode
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+            </div>
+          </div>
 
           <div className="mx-1 h-6 w-px bg-stone-200" />
 
           {/* Select neighbourhoods */}
-          <button
-            onClick={() => handleSetDrawMode("select")}
-            title="Select neighbourhoods"
-            className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-              drawMode === "select" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
-            }`}
-          >
-            {/* Cursor + dashed selection box — indicates click-to-select-region */}
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-[18px] w-[18px]">
-              <path d="M2.5 1.5 L2.5 12.5 L5.5 9.5 L7.5 14 L9 13.3 L7 8.8 L11 8.8 Z" />
-              <rect x="11.5" y="11" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 1.2" />
-            </svg>
-          </button>
+          <div className="group relative">
+            <button
+              onClick={() => handleSetDrawMode("select")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+                drawMode === "select" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
+              }`}
+            >
+              {/* Cursor + dashed selection box — indicates click-to-select-region */}
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4.5 w-4.5">
+                <path d="M2.5 1.5 L2.5 12.5 L5.5 9.5 L7.5 14 L9 13.3 L7 8.8 L11 8.8 Z" />
+                <rect x="11.5" y="11" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2 1.2" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Select neighbourhoods
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+            </div>
+          </div>
 
           <div className="mx-1 h-6 w-px bg-stone-200" />
 
           {/* Polygon boundary */}
-          <button
-            onClick={() => handleSetDrawMode("boundary")}
-            title="Draw boundary"
-            className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-              drawMode === "boundary" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
-            }`}
-          >
-            {/* Dashed polygon with vertex dots */}
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4">
-              <polygon points="10,2 17,6.5 14.5,16 5.5,16 3,6.5" strokeWidth="1.6" strokeLinejoin="round" strokeDasharray="2.5 1.5" />
-              <circle cx="10" cy="2" r="1.4" fill="currentColor" stroke="none" />
-              <circle cx="17" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
-              <circle cx="14.5" cy="16" r="1.4" fill="currentColor" stroke="none" />
-              <circle cx="5.5" cy="16" r="1.4" fill="currentColor" stroke="none" />
-              <circle cx="3" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
+          <div className="group relative">
+            <button
+              onClick={() => handleSetDrawMode("boundary")}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+                drawMode === "boundary" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
+              }`}
+            >
+              {/* Dashed polygon with vertex dots */}
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4">
+                <polygon points="10,2 17,6.5 14.5,16 5.5,16 3,6.5" strokeWidth="1.6" strokeLinejoin="round" strokeDasharray="2.5 1.5" />
+                <circle cx="10" cy="2" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="17" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="14.5" cy="16" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="5.5" cy="16" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="3" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Draw boundary
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+            </div>
+          </div>
 
           {/* Clear button — visible when there's a drawn boundary or selected neighbourhoods */}
           {hasSelection && (
             <>
               <div className="mx-1 h-6 w-px bg-stone-200" />
-              <button
-                onClick={handleClearAll}
-                title="Clear selection"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-red-50 hover:text-red-500"
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                  <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193v-.443A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
-                </svg>
-              </button>
+              <div className="group relative">
+                <button
+                  onClick={handleClearAll}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-red-50 hover:text-red-500"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193v-.443A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  Clear selection
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+                </div>
+              </div>
             </>
           )}
         </div>
 
         {/* Drawing hint — shown while actively drawing a polygon */}
         {drawMode === "boundary" && (
-          <div className="pointer-events-auto absolute top-0 left-full ml-2 flex h-[52px] items-center gap-3 whitespace-nowrap rounded-xl border border-stone-200 bg-white px-4 text-sm text-stone-500 shadow-sm">
+          <div className="pointer-events-auto absolute top-0 left-full ml-2 flex h-13 items-center gap-3 whitespace-nowrap rounded-xl border border-stone-200 bg-white px-4 text-sm text-stone-500 shadow-sm">
             <span>Double-click to finish</span>
             <span className="h-4 w-px bg-stone-200" />
             <button
@@ -1386,7 +1566,7 @@ export function TransitMap() {
 
         {/* Selection badge — absolutely anchored to the right of the toolbar, doesn't shift layout */}
         {(selectedNeighbourhoods.size > 0 || selectedStations.size > 0) && (
-          <div className="pointer-events-auto absolute top-0 left-full ml-2 flex h-[52px] items-center whitespace-nowrap rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-medium text-indigo-700 shadow-sm">
+          <div className="pointer-events-auto absolute top-0 left-full ml-2 flex h-13 items-center whitespace-nowrap rounded-xl border border-indigo-200 bg-indigo-50 px-4 text-sm font-medium text-indigo-700 shadow-sm">
             SELECTED: {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""}, {selectedStations.size} stop{selectedStations.size !== 1 ? "s" : ""}
           </div>
         )}
@@ -1412,9 +1592,9 @@ export function TransitMap() {
           />
         ) : showGeneratedPanel ? (
           <GeneratedRoutePanel
-            route={generatedRoute}
+            route={generatedRoute!}
             disabledStops={disabledStops}
-            isGenerating={isGenerating}
+            isGenerating={councilOpen}
             onToggleStop={handleToggleStop}
             onClose={() => setGeneratedRoute(null)}
             onRegenerate={handleGenerate}
@@ -1458,17 +1638,30 @@ export function TransitMap() {
         </div>
       </div>
 
-      {/* Generate Route — bottom centre, only visible when an area is selected */}
-      {hasSelection && (
-        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex justify-center">
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="pointer-events-auto flex h-[52px] items-center gap-3 rounded-xl bg-stone-900 px-8 text-base font-medium text-white shadow-lg transition-all hover:bg-stone-800 disabled:opacity-50"
-          >
-            <span className={`text-xl ${isGenerating ? "inline-block animate-spin" : ""}`}>✦</span>
-            {isGenerating ? "Generating…" : "Generate Route"}
-          </button>
+      {/* Generate Route / View Council — bottom centre */}
+      {(hasSelection || councilHasRun) && (
+        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex justify-center gap-3">
+          {hasSelection && (
+            <button
+              onClick={handleGenerate}
+              disabled={councilOpen}
+              className="pointer-events-auto flex h-13 items-center gap-3 rounded-xl bg-stone-900 px-8 text-base font-medium text-white shadow-lg transition-all hover:bg-stone-800 disabled:opacity-50"
+            >
+              <span className="text-xl">✦</span>
+              Generate Route
+            </button>
+          )}
+          {councilHasRun && !councilOpen && (
+            <button
+              onClick={handleViewCouncil}
+              className="pointer-events-auto flex h-13 items-center gap-3 rounded-xl border border-stone-300 bg-white px-6 text-base font-medium text-stone-700 shadow-lg transition-all hover:bg-stone-50"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 2"/>
+              </svg>
+              View Council
+            </button>
+          )}
         </div>
       )}
 

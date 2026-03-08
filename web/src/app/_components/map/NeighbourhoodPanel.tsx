@@ -38,7 +38,7 @@ export function NeighbourhoodPanel({
   // ── Street view image with localStorage cache
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   useEffect(() => {
-    const key = `streetview-${lat.toFixed(5)}-${lng.toFixed(5)}`;
+    const key = `streetview-neighbourhood-${name}`;
     const cached = localStorage.getItem(key);
     if (cached) { setImgSrc(cached); return; }
     const apiUrl = `/api/streetview?lat=${lat}&lng=${lng}`;
@@ -54,7 +54,7 @@ export function NeighbourhoodPanel({
         setImgSrc(dataUrl);
       })
       .catch(() => setImgSrc(apiUrl));
-  }, [lat, lng]);
+  }, [name, lat, lng]);
 
   // ── Compute population + traffic from real data
   const { totalPop, trafficLevel } = useMemo(() => {

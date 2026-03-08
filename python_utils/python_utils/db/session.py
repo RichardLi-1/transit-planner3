@@ -24,10 +24,13 @@ def _get_db_log_enabled() -> bool:
 
 
 def _get_database_url() -> str:
-    value = os.getenv("DATABASE_URL_PYTHON_RIDERSHIP", "").strip()
+    value = (
+        os.getenv("DATABASE_URL_PYTHON_RIDERSHIP", "")
+        or os.getenv("DATABASE_URL_PYTHON", "")
+    ).strip()
     if not value:
         raise RuntimeError(
-            "DATABASE_URL_PYTHON_RIDERSHIP is not set. "
+            "DATABASE_URL_PYTHON_RIDERSHIP (or DATABASE_URL_PYTHON) is not set. "
             "Expected format: postgresql+psycopg://user:password@host:5432/database"
         )
     return value
