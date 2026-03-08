@@ -5,17 +5,9 @@ RUN apk add --no-cache openssl
 WORKDIR /app
 
 ARG NEXTAUTH_URL
-ARG AUTH_SECRET
-ARG DATABASE_URL
-ARG SUPABASE_URL
-ARG SUPABASE_KEY
 ARG NEXT_PUBLIC_MAPBOX_TOKEN
 
 ENV NEXTAUTH_URL=$NEXTAUTH_URL
-ENV AUTH_SECRET=$AUTH_SECRET
-ENV DATABASE_URL=$DATABASE_URL
-ENV SUPABASE_URL=$SUPABASE_URL
-ENV SUPABASE_KEY=$SUPABASE_KEY
 ENV NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN
 
 COPY web/package.json web/package-lock.json ./
@@ -23,7 +15,15 @@ RUN npm i --legacy-peer-deps
 
 COPY web/ .
 
-RUN npm run build
+RUN --mount=type=secret,id=auth_secret \
+    --mount=type=secret,id=database_url \
+    --mount=type=secret,id=supabase_url \
+    --mount=type=secret,id=supabase_key \
+    AUTH_SECRET="$(cat /run/secrets/auth_secret)" \
+    DATABASE_URL="$(cat /run/secrets/database_url)" \
+    SUPABASE_URL="$(cat /run/secrets/supabase_url)" \
+    SUPABASE_KEY="$(cat /run/secrets/supabase_key)" \
+    npm run build
 
 FROM node:20-alpine AS runner
 

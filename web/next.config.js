@@ -1,7 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
+const { loadEnvConfig } = nextEnv;
 
 /**
  * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful

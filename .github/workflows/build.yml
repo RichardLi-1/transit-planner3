@@ -74,11 +74,12 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           build-args: |
             NEXTAUTH_URL=${{ vars.NEXTAUTH_URL || 'https://build-placeholder.example.com' }}
-            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
             NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          secrets: |
+            auth_secret=${{ secrets.AUTH_SECRET }}
+            database_url=${{ secrets.DATABASE_URL }}
+            supabase_url=${{ secrets.SUPABASE_URL }}
+            supabase_key=${{ secrets.SUPABASE_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
