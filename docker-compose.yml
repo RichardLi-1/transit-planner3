@@ -10,7 +10,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
     ports:
-      - "${WEB_BACKEND_HOST_PORT:-8000}:8000"
+      - "8000:8000"
     networks:
       - proxy_net
     profiles:
@@ -25,7 +25,7 @@ services:
     environment:
       - WEB_BACKEND_URL=${WEB_BACKEND_URL:-http://web-backend:8000}
     ports:
-      - "${FRONTEND_HOST_PORT:-3000}:3000"
+      - "3000:3000"
     depends_on:
       - web-backend
     networks:
