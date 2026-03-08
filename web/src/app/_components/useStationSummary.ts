@@ -6,6 +6,7 @@ export type StationSummaryData = {
   stationName: string;
   routeName: string;
   ridership?: number;
+  populationServed?: number;
   connections?: string[];
   allStations?: Array<{ name: string; ridership?: number }>;
 };

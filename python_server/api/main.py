@@ -153,4 +153,4 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/")
 def root() -> dict:
-        return {"message": "Transit Planner Python Server", "database": "unavailable", "error": str(exc.__class__.__name__)}
+    return {"message": "Transit Planner Python Server"}

@@ -1488,6 +1488,7 @@ export function TransitMap() {
         <StationPopup
           popup={stationPopup}
           allRoutes={[...ROUTES, ...customLines]}
+          stationPopulations={stationPopulations}
           isDeletable={
             customLines.some((r) => r.id === stationPopup.routeId) ||
             (routeExtraStops.get(stationPopup.routeId) ?? []).some((s) => s.name === stationPopup.name)

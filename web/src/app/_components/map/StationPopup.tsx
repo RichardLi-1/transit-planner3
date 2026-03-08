@@ -7,6 +7,7 @@ import { useStationSummary } from "../useStationSummary";
 export function StationPopup({
   popup,
   allRoutes,
+  stationPopulations,
   isDeletable,
   connectedRoutes,
   onClose,
@@ -14,8 +15,9 @@ export function StationPopup({
   onAddTransfer,
   onRemoveTransfer,
 }: {
-  popup: { name: string; routeId: string; x: number; y: number };
+  popup: { name: string; routeId: string; x: number; y: number; coords?: [number, number] };
   allRoutes: Route[];
+  stationPopulations: Map<string, number>;
   isDeletable: boolean;
   connectedRoutes: Route[];
   onClose: () => void;
@@ -27,27 +29,27 @@ export function StationPopup({
   const connectedIds = new Set(connectedRoutes.map((r) => r.id));
   const transferableRoutes = allRoutes.filter((r) => r.id !== popup.routeId && !connectedIds.has(r.id));
   
+  // Get population served from the pre-computed stationPopulations (Voronoi method, 5km cutoff)
+  const rawPopulationServed = stationPopulations.get(popup.name);
+  const populationServed = rawPopulationServed !== undefined ? Math.max(2314, rawPopulationServed) : undefined;
+  
+  // Estimate ridership as ~15% of population served
+  const ridership = populationServed !== undefined ? Math.round(populationServed * 0.15) : undefined;
+  
   // AI Summary hook
   const { getSummary, isLoading: isSummaryLoading, getCachedSummary } = useStationSummary();
   const [summary, setSummary] = useState<string>("");
   const [showSummary, setShowSummary] = useState(false);
 
-  // Generate mock ridership data for demonstration
-  // In production, this would come from your actual data source
-  const getMockRidership = (stationName: string): number => {
-    // Generate consistent "random" ridership based on station name
-    const hash = stationName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return 5000 + (hash % 20000); // Between 5k and 25k passengers
-  };
-
-  const ridership = getMockRidership(popup.name);
-
   // Collect all stations for comparison
   const allStations = allRoutes.flatMap(route => 
-    route.stops.map(stop => ({
-      name: stop.name,
-      ridership: getMockRidership(stop.name)
-    }))
+    route.stops.map(stop => {
+      const pop = stationPopulations.get(stop.name);
+      return {
+        name: stop.name,
+        ridership: pop !== undefined ? Math.round(Math.max(2314, pop) * 0.15) : undefined
+      };
+    })
   );
 
   useEffect(() => {
@@ -60,12 +62,13 @@ export function StationPopup({
           stationName: popup.name,
           routeName: currentRoute?.name ?? popup.routeId,
           ridership,
+          populationServed,
           connections: connectedRoutes.map(r => r.name),
           allStations,
         }).then(setSummary).catch(console.error);
       }
     }
-  }, [showSummary, popup.name, currentRoute, ridership, connectedRoutes, allStations, getSummary, getCachedSummary, isSummaryLoading, summary]);
+  }, [showSummary, popup.name, currentRoute, ridership, populationServed, connectedRoutes, allStations, getSummary, getCachedSummary, isSummaryLoading, summary]);
 
   return (
     <div
@@ -134,9 +137,23 @@ export function StationPopup({
         
         {showSummary && (
           <div className="mt-2 rounded-lg bg-stone-50 p-2.5">
-            <div className="mb-1.5 flex items-center gap-2 text-[10px] text-stone-500">
-              <span className="font-semibold">Daily Ridership:</span>
-              <span>{ridership.toLocaleString()} passengers</span>
+            <div className="mb-1.5 space-y-1 text-[10px] text-stone-500">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Population Served:</span>
+                {populationServed !== undefined ? (
+                  <span>{populationServed.toLocaleString()} people (nearest-station, 5km cutoff)</span>
+                ) : (
+                  <span className="text-stone-400">Data unavailable</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Est. Daily Ridership:</span>
+                {ridership !== undefined ? (
+                  <span>{ridership.toLocaleString()} passengers</span>
+                ) : (
+                  <span className="text-stone-400">Data unavailable</span>
+                )}
+              </div>
             </div>
             {isSummaryLoading(popup.name, currentRoute?.name ?? "") ? (
               <div className="flex items-center gap-2 text-xs text-stone-500">

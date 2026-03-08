@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       stationName: string;
       routeName: string;
       ridership?: number;
+      populationServed?: number;
       connections?: string[];
       allStations?: Array<{ name: string; ridership?: number }>;
     };
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       stationName,
       routeName,
       ridership,
+      populationServed,
       connections = [],
       allStations = [],
     } = body;
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
       stationName,
       routeName,
       ridership,
+      populationServed,
       connections,
       allStations,
     );
@@ -97,6 +100,7 @@ function buildStationAnalysisPrompt(
   stationName: string,
   routeName: string,
   ridership?: number,
+  populationServed?: number,
   connections: string[] = [],
   allStations: Array<{ name: string; ridership?: number }> = [],
 ): string {
@@ -104,8 +108,12 @@ function buildStationAnalysisPrompt(
     `Analyze ${stationName} station on ${routeName}.`,
   ];
 
+  if (populationServed !== undefined) {
+    lines.push(`Population served (nearest-station Voronoi assignment, 5km cutoff): ${populationServed.toLocaleString()} people.`);
+  }
+
   if (ridership !== undefined) {
-    lines.push(`Daily ridership: ${ridership.toLocaleString()} passengers.`);
+    lines.push(`Estimated daily ridership: ${ridership.toLocaleString()} passengers.`);
     
     // Calculate comparisons if we have other station data
     if (allStations.length > 0) {
@@ -133,7 +141,7 @@ function buildStationAnalysisPrompt(
   }
 
   lines.push(
-    "\nProvide a brief 2-3 sentence analysis: Is this station crowded, overloaded, or underutilized? How does it compare to the network?",
+    "\nProvide a brief 2-3 sentence analysis: Is this station crowded, overloaded, or underutilized based on the population it serves? How does the ridership compare to nearby population density?",
   );
 
   return lines.join(" ");
