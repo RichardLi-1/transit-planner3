@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "check": "next lint && tsc --noEmit",
-    "dev": "cross-env DOTENV_CONFIG_PATH=../.env NODE_OPTIONS=\"--require=dotenv/config\" next dev --turbo",
+    "dev": "cross-env DOTENV_CONFIG_PATH=../.env node -r dotenv/config ./node_modules/next/dist/bin/next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "lint": "next lint",
@@ -19,7 +19,6 @@
     "@auth/prisma-adapter": "^2.7.2",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@react-three/fiber": "^9.5.0",
-    "@repo/web_db": "0.1.0",
     "@repo/web_utils": "0.1.0",
     "@supabase/supabase-js": "^2.98.0",
     "@t3-oss/env-nextjs": "^0.12.0",
@@ -34,13 +33,12 @@
     "next-auth": "5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0",
     "server-only": "^0.0.1",
     "superjson": "^2.2.1",
-    "tailwindcss": "^4.0.15",
     "three": "^0.183.2",
     "wkx": "^0.5.0",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "tailwindcss": "^4.0.15"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
