@@ -9,7 +9,6 @@ type DrawMode = "normal" | "select" | "boundary";
 
 import {
   GENERATED_ROUTES,
-  NEIGHBOURHOOD_DATA,
   ROUTES,
   type GeneratedRoute,
   type Route,
@@ -17,6 +16,57 @@ import {
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const TORONTO: [number, number] = [-79.3832, 43.6532];
+
+// ─── geo helpers ──────────────────────────────────────────────────────────────
+
+function pointInRing(px: number, py: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]![0]!, yi = ring[i]![1]!;
+    const xj = ring[j]![0]!, yj = ring[j]![1]!;
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function pointInGeometry(pt: [number, number], geom: GeoJSON.Geometry): boolean {
+  if (geom.type === "Polygon") {
+    return pointInRing(pt[0], pt[1], (geom.coordinates as number[][][])[0]!);
+  }
+  if (geom.type === "MultiPolygon") {
+    return (geom.coordinates as number[][][][]).some((poly) => pointInRing(pt[0], pt[1], poly[0]!));
+  }
+  return false;
+}
+
+function geomBBox(geom: GeoJSON.Geometry): [number, number, number, number] {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  function walk(c: unknown) {
+    if (Array.isArray(c) && typeof c[0] === "number") {
+      if (c[0]! < minX) minX = c[0]!;
+      if (c[1]! < minY) minY = c[1]!;
+      if (c[0]! > maxX) maxX = c[0]!;
+      if (c[1]! > maxY) maxY = c[1]!;
+    } else if (Array.isArray(c)) { c.forEach(walk); }
+  }
+  walk((geom as unknown as { coordinates: unknown }).coordinates);
+  return [minX, minY, maxX, maxY];
+}
+
+function firstCoord(geom: GeoJSON.Geometry): [number, number] | null {
+  let result: [number, number] | null = null;
+  function walk(c: unknown): boolean {
+    if (Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number") {
+      result = [c[0] as number, c[1] as number]; return true;
+    }
+    if (Array.isArray(c)) { for (const x of c) if (walk(x)) return true; }
+    return false;
+  }
+  walk((geom as unknown as { coordinates: unknown }).coordinates);
+  return result;
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +137,12 @@ function StatBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
+const TYPE_LABEL: Record<Route["type"], string> = {
+  subway: "Subway",
+  streetcar: "Streetcar",
+  bus: "Bus",
+};
+
 // ─── neighbourhood panel ──────────────────────────────────────────────────────
 
 const TRAFFIC_COLOR: Record<string, string> = {
@@ -96,36 +152,94 @@ const TRAFFIC_COLOR: Record<string, string> = {
   "Very High": "#ef4444",
 };
 
+const TRAFFIC_COLOR_TO_LEVEL: Record<string, string> = {
+  "green": "Low",
+  "yellow": "Moderate",
+  "orange": "High",
+  "red": "Very High",
+};
+
 function NeighbourhoodPanel({
-  id,
   name,
   lat,
   lng,
+  geometry,
+  popRawData,
+  trafficFeatures,
   onClose,
 }: {
-  id: string;
   name: string;
   lat: number;
   lng: number;
+  geometry: GeoJSON.Geometry | null;
+  popRawData: import("~/app/map/geo-utils").PopRow[];
+  trafficFeatures: GeoJSON.Feature[];
   onClose: () => void;
 }) {
-  const data = NEIGHBOURHOOD_DATA[id];
-  const transitLines = ROUTES.filter((r) => data?.transitLines.includes(r.id));
-  const [imgLoaded, setImgLoaded] = useState(false);
+  // ── Street view image with localStorage cache
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  useEffect(() => {
+    const key = `streetview-${lat.toFixed(5)}-${lng.toFixed(5)}`;
+    const cached = localStorage.getItem(key);
+    if (cached) { setImgSrc(cached); return; }
+    const apiUrl = `/api/streetview?lat=${lat}&lng=${lng}`;
+    fetch(apiUrl)
+      .then((r) => r.blob())
+      .then((blob) => new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      }))
+      .then((dataUrl) => {
+        try { localStorage.setItem(key, dataUrl); } catch { /* storage full */ }
+        setImgSrc(dataUrl);
+      })
+      .catch(() => setImgSrc(apiUrl));
+  }, [lat, lng]);
+
+  // ── Compute population + traffic from real data
+  const { totalPop, trafficLevel } = useMemo(() => {
+    if (!geometry) return { totalPop: null, trafficLevel: null };
+    const bbox = geomBBox(geometry);
+
+    let totalPop = 0;
+    for (const row of popRawData) {
+      const { longitude: lng, latitude: lat, population } = row;
+      if (lng < bbox[0] || lng > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+      if (pointInGeometry([lng, lat], geometry)) totalPop += population;
+    }
+
+    const levelCounts: Record<string, number> = { Low: 0, Moderate: 0, High: 0, "Very High": 0 };
+    for (const feat of trafficFeatures) {
+      const color = feat.properties?.traffic_color as string | null;
+      if (!color) continue;
+      const pt = firstCoord(feat.geometry);
+      if (!pt) continue;
+      if (pt[0] < bbox[0] || pt[0] > bbox[2] || pt[1] < bbox[1] || pt[1] > bbox[3]) continue;
+      if (!pointInGeometry(pt, geometry)) continue;
+      const level = TRAFFIC_COLOR_TO_LEVEL[color];
+      if (level) levelCounts[level]!++;
+    }
+    const total = Object.values(levelCounts).reduce((a, b) => a + b, 0);
+    const trafficLevel = total > 0
+      ? (Object.entries(levelCounts).reduce((a, b) => a[1] >= b[1] ? a : b)[0] as string)
+      : null;
+
+    return { totalPop: totalPop > 0 ? totalPop : null, trafficLevel };
+  }, [geometry, popRawData, trafficFeatures]);
 
   return (
     <div className="pointer-events-auto w-72 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Preview image */}
-      <div className="relative h-36">
-        {!imgLoaded && (
-          <div className="absolute inset-0 animate-pulse bg-stone-200" />
+      <div className="relative h-36 bg-stone-200">
+        {!imgSrc && <div className="absolute inset-0 animate-pulse bg-stone-200" />}
+        {imgSrc && (
+          <img
+            src={imgSrc}
+            alt="Neighbourhood view"
+            className="h-full w-full object-cover"
+          />
         )}
-        <img 
-          src={`/api/streetview?lat=${lat}&lng=${lng}`} 
-          alt="Neighbourhood view" 
-          className="h-full w-full object-cover" 
-          onLoad={() => setImgLoaded(true)}
-        />
         <button
           onClick={onClose}
           className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-stone-500 hover:bg-white hover:text-stone-800"
@@ -137,59 +251,25 @@ function NeighbourhoodPanel({
       <div className="px-5 pt-4 pb-5 space-y-4">
         <h2 className="text-lg font-semibold text-stone-800">{name}</h2>
 
-        {data ? (
-          <>
-            <div className="space-y-2.5">
-              {/* Traffic */}
-              <div className="flex justify-between text-sm">
-                <span className="text-stone-500">Traffic levels</span>
-                <span className="font-semibold" style={{ color: TRAFFIC_COLOR[data.trafficLevel] }}>
-                  {data.trafficLevel}
-                </span>
-              </div>
-
-              {/* Employment */}
-              <div className="flex justify-between text-sm">
-                <span className="text-stone-500">Employment density</span>
-                <span className="font-semibold text-stone-800">{data.employmentDensity}</span>
-              </div>
-
-              {/* Population */}
-              <div className="flex justify-between text-sm">
-                <span className="text-stone-500">Population density</span>
-                <span className="font-semibold text-stone-800">{data.populationDensity.toLocaleString()} / km²</span>
-              </div>
-
-              {/* Connectivity */}
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-stone-500">Transit connectivity</span>
-                  <span className="font-semibold text-stone-800">{data.connectivityScore}/10</span>
-                </div>
-                <StatBar value={data.connectivityScore} max={10} color="#6366f1" />
-              </div>
+        <div className="space-y-2.5">
+          {trafficLevel && (
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-500">Traffic level</span>
+              <span className="font-semibold" style={{ color: TRAFFIC_COLOR[trafficLevel] }}>
+                {trafficLevel}
+              </span>
             </div>
-
-            {/* Transit lines */}
-            {transitLines.length > 0 && (
-              <div>
-                <p className="mb-2 text-[11px] font-semibold tracking-widest text-stone-400 uppercase">
-                  Lines in the area
-                </p>
-                <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
-                  {transitLines.map((r) => (
-                    <li key={r.id} className="flex items-center gap-2 text-sm text-stone-600">
-                      <span className="h-2.5 w-6 shrink-0 rounded-full" style={{ background: r.color }} />
-                      {r.name.split(" – ")[0]}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-stone-400">No data available</p>
-        )}
+          )}
+          {totalPop !== null && (
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-500">Total population</span>
+              <span className="font-semibold text-stone-800">{totalPop.toLocaleString()}</span>
+            </div>
+          )}
+          {!trafficLevel && totalPop === null && (
+            <p className="text-sm text-stone-400">No data available</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -707,7 +787,7 @@ export function TransitMap() {
   }, [popRawData]);
   const [hasBoundary, setHasBoundary] = useState(false);
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState<Set<string>>(new Set());
-  const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number } | null>(null);
+  const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number; geometry: GeoJSON.Geometry | null } | null>(null);
   const genIdxRef = useRef(0);
 
   // ── line-editor state
@@ -729,6 +809,8 @@ export function TransitMap() {
   // Blocks neighbourhood clicks for one tick after a polygon is completed,
   // preventing the closing double-click from immediately selecting a neighbourhood.
   const justCompletedBoundaryRef = useRef(false);
+  // Cache for the full neighbourhood GeoJSON (needed for geometry lookups on click)
+  const neighbourhoodsGeoJSONRef = useRef<GeoJSON.FeatureCollection | null>(null);
   const didDragStopRef = useRef(false); // suppresses click after a drag
   const stationPopupRef = useRef<typeof stationPopup>(null);
 
@@ -860,6 +942,14 @@ export function TransitMap() {
       return next;
     });
   }
+
+  // ── fetch and cache neighbourhoods GeoJSON for geometry lookups
+  useEffect(() => {
+    fetch("/Neighbourhoods - 4326.geojson")
+      .then((r) => r.json())
+      .then((data: GeoJSON.FeatureCollection) => { neighbourhoodsGeoJSONRef.current = data; })
+      .catch(console.error);
+  }, []);
 
   // ── fetch population data from Supabase via API
   useEffect(() => {
@@ -1107,7 +1197,10 @@ export function TransitMap() {
           });
         } else {
           // Select — show panel for clicked neighbourhood
-          setFocusedNeighbourhood({ id, name: name ?? id, lat: e.lngLat.lat, lng: e.lngLat.lng });
+          const feat = neighbourhoodsGeoJSONRef.current?.features.find(
+            (f) => f.properties?.AREA_SHORT_CODE === id
+          );
+          setFocusedNeighbourhood({ id, name: name ?? id, lat: e.lngLat.lat, lng: e.lngLat.lng, geometry: feat?.geometry ?? null });
           map.setFeatureState({ source: "neighbourhoods", id }, { selected: true });
           setSelectedNeighbourhoods((prev) => new Set([...prev, id]));
         }
@@ -1796,10 +1889,12 @@ export function TransitMap() {
 
         {focusedNeighbourhood && (
           <NeighbourhoodPanel
-            id={focusedNeighbourhood.id}
             name={focusedNeighbourhood.name}
             lat={focusedNeighbourhood.lat}
             lng={focusedNeighbourhood.lng}
+            geometry={focusedNeighbourhood.geometry}
+            popRawData={popRawData}
+            trafficFeatures={trafficGeoJSON?.features ?? []}
             onClose={() => setFocusedNeighbourhood(null)}
           />
         )}
