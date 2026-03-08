@@ -176,7 +176,7 @@ function NeighbourhoodPanel({
 
 // ─── existing route panel ────────────────────────────────────────────────────
 
-function RoutePanel({ route, onClose }: { route: Route; onClose: () => void }) {
+function RoutePanel({ route, selectedStop, onClose }: { route: Route; selectedStop: string | null; onClose: () => void }) {
   return (
     <div className="pointer-events-auto flex h-full w-80 flex-col overflow-hidden rounded-[30px] bg-white shadow-2xl" style={{ border: "0.93px solid #BEB7B4" }}>
       <div className="flex items-start justify-between px-5 pt-5 pb-4">
@@ -189,9 +189,9 @@ function RoutePanel({ route, onClose }: { route: Route; onClose: () => void }) {
           </span>
           <div>
             <p className="text-[11px] font-medium tracking-widest text-stone-400 uppercase">
-              {TYPE_LABEL[route.type]}
+              {selectedStop ? route.name : TYPE_LABEL[route.type]}
             </p>
-            <h2 className="text-base font-semibold leading-tight text-stone-800">{route.name}</h2>
+            <h2 className="text-base font-semibold leading-tight text-stone-800">{selectedStop ?? route.name}</h2>
           </div>
         </div>
         <button
@@ -226,7 +226,7 @@ function RoutePanel({ route, onClose }: { route: Route; onClose: () => void }) {
                     i === 0 || i === route.stops.length - 1 ? route.color : route.color + "88",
                 }}
               />
-              <span className="py-1.5 pl-4 text-sm text-stone-700">{stop.name}</span>
+              <span className={`py-1.5 pl-4 text-sm ${stop.name === selectedStop ? "font-bold text-stone-900" : "text-stone-700"}`}>{stop.name}</span>
             </li>
           ))}
         </ol>
@@ -416,6 +416,7 @@ export function TransitMap() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [selectedStop, setSelectedStop] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [generatedRoute, setGeneratedRoute] = useState<GeneratedRoute | null>(null);
   const [disabledStops, setDisabledStops] = useState<Set<string>>(new Set());
@@ -877,7 +878,7 @@ export function TransitMap() {
           },
         });
 
-        map.on("click", `route-line-${route.id}`, () => setSelectedRoute(route));
+        map.on("click", `route-line-${route.id}`, () => { setSelectedRoute(route); setSelectedStop(null); });
 
         map.on("mouseenter", `route-line-${route.id}`, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -889,6 +890,23 @@ export function TransitMap() {
           map.getCanvas().style.cursor = "";
           map.setPaintProperty(`route-line-${route.id}`, "line-width", 4);
           setHoveredId(null);
+        });
+
+        // Station dot click — open route panel with station selected
+        map.on("click", `stops-dot-${route.id}`, (e) => {
+          const name = e.features?.[0]?.properties?.name as string | undefined;
+          if (!name) return;
+          e.originalEvent.stopPropagation();
+          setSelectedRoute(route);
+          setSelectedStop(name);
+        });
+
+        map.on("mouseenter", `stops-dot-${route.id}`, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+
+        map.on("mouseleave", `stops-dot-${route.id}`, () => {
+          map.getCanvas().style.cursor = "";
         });
       });
 
@@ -1213,7 +1231,7 @@ export function TransitMap() {
         }`}
       >
         {selectedRoute ? (
-          <RoutePanel route={selectedRoute} onClose={() => setSelectedRoute(null)} />
+          <RoutePanel route={selectedRoute} selectedStop={selectedStop} onClose={() => { setSelectedRoute(null); setSelectedStop(null); }} />
         ) : showGeneratedPanel ? (
           <GeneratedRoutePanel
             route={generatedRoute}
