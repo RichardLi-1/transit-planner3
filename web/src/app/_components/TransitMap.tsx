@@ -24,11 +24,43 @@ const TORONTO: [number, number] = [-79.3832, 43.6532];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** Catmull-Rom spline interpolation for a single axis */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  return 0.5 * (
+    2 * p1 +
+    (-p0 + p2) * t +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t
+  );
+}
+
+/** Insert smooth curve points between each pair of coordinates using Catmull-Rom spline */
+function smoothCoords(coords: [number, number][], steps = 12): [number, number][] {
+  if (coords.length < 2) return coords;
+  const result: [number, number][] = [];
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p0 = coords[Math.max(0, i - 1)]!;
+    const p1 = coords[i]!;
+    const p2 = coords[i + 1]!;
+    const p3 = coords[Math.min(coords.length - 1, i + 2)]!;
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      result.push([catmullRom(p0[0], p1[0], p2[0], p3[0], t), catmullRom(p0[1], p1[1], p2[1], p3[1], t)]);
+    }
+  }
+  result.push(coords[coords.length - 1]!);
+  return result;
+}
+
 function routeToGeoJSON(route: Route): GeoJSON.Feature<GeoJSON.LineString> {
+  const raw = route.shape ?? route.stops.map((s) => s.coords);
   return {
     type: "Feature",
     properties: { id: route.id },
-    geometry: { type: "LineString", coordinates: route.stops.map((s) => s.coords) },
+    geometry: {
+      type: "LineString",
+      coordinates: smoothCoords(raw),
+    },
   };
 }
 
