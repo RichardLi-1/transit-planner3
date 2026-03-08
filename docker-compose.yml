@@ -32,27 +32,8 @@ services:
       - proxy_net
     profiles:
       - web
+      - web-backend
 
-
-  server:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:-genghis-routing}/server:${IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_NAME_PREFIX:-genghis-routing}-server
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
-      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
-    ports:
-      - "${SERVER_HOST_PORT:-8080}:8080"
-    networks:
-      - proxy_net
-    profiles:
-      - server
 
 networks:
   proxy_net:
