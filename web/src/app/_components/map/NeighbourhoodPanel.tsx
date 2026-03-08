@@ -43,7 +43,7 @@ export function NeighbourhoodPanel({
     if (cached) { setImgSrc(cached); return; }
     const apiUrl = `/api/streetview?lat=${lat}&lng=${lng}`;
     fetch(apiUrl)
-      .then((r) => r.blob())
+      .then((r) => { if (!r.ok) throw new Error("no imagery"); return r.blob(); })
       .then((blob) => new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -53,7 +53,7 @@ export function NeighbourhoodPanel({
         try { localStorage.setItem(key, dataUrl); } catch { /* storage full */ }
         setImgSrc(dataUrl);
       })
-      .catch(() => setImgSrc(apiUrl));
+      .catch(() => setImgSrc("/placeholder.png"));
   }, [name, lat, lng]);
 
   // ── Compute population + traffic from real data
@@ -88,7 +88,7 @@ export function NeighbourhoodPanel({
   }, [geometry, popRawData, trafficFeatures]);
 
   return (
-    <div className="pointer-events-auto w-72 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
+    <div className="pointer-events-auto w-80 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Preview image */}
       <div className="relative h-36 bg-stone-200">
         {!imgSrc && <div className="absolute inset-0 animate-pulse bg-stone-200" />}
@@ -97,6 +97,7 @@ export function NeighbourhoodPanel({
             src={imgSrc}
             alt="Neighbourhood view"
             className="h-full w-full object-cover"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/placeholder.png"; }}
           />
         )}
         <button

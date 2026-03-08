@@ -12,9 +12,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Missing lat or lng parameters' }, { status: 400 });
     }
 
-    const url = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
+    const url = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&return_error_code=true&key=${apiKey}`;
 
     const response = await fetch(url);
+    if (!response.ok) {
+        return new NextResponse(null, { status: 404 });
+    }
     const buffer = await response.arrayBuffer();
 
     return new NextResponse(buffer, {
