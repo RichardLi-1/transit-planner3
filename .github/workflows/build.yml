@@ -90,3 +90,244 @@ jobs:
           labels: ${{ steps.meta-web-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'production' || github.event.workflow_run.head_branch == 'development'))
+    environment: ${{ (github.event.workflow_run.head_branch == 'production' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/production')) && 'Production' || 'Development' }}
+
+    steps:
+      - name: Set deploy ref
+        run: |
+          REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          echo "DEPLOY_REF=$REF" >> $GITHUB_ENV
+          echo "Deploy ref: $REF"
+
+      - name: Display Deployment Environment
+        run: |
+          if [ "${{ env.DEPLOY_REF }}" == "production" ]; then
+            ENV="PRODUCTION"
+            ENV_EMOJI="🚀"
+          else
+            ENV="development"
+            ENV_EMOJI="🧪"
+          fi
+          echo "::notice title=Deployment Environment::$ENV_EMOJI Deploying to: $ENV Environment"
+          echo "=========================================="
+          echo "$ENV_EMOJI  DEPLOYMENT ENVIRONMENT: $ENV"
+          echo "   Ref: ${{ env.DEPLOY_REF }}"
+          echo "   Environment: $ENV"
+          echo "=========================================="
+
+      - name: Deploy to VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            # Determine deployment environment from ref (passed by workflow)
+            DEPLOY_REF="${{ env.DEPLOY_REF }}"
+            if [ "$DEPLOY_REF" = "production" ]; then
+              DEPLOY_ENV="PRODUCTION"
+              ENV_EMOJI="🚀"
+            else
+              DEPLOY_ENV="development"
+              ENV_EMOJI="🧪"
+            fi
+
+            echo ""
+            echo "=========================================="
+            echo "$ENV_EMOJI  DEPLOYING TO: $DEPLOY_ENV ENVIRONMENT"
+            echo "   Ref: $DEPLOY_REF"
+            echo "   Environment: $DEPLOY_ENV"
+            echo "=========================================="
+            echo ""
+
+            # Configure git to not prompt for credentials
+            export GIT_TERMINAL_PROMPT=0
+            git config --global credential.helper store
+            git config --global url."https://".insteadOf git@
+
+            REPO_URL="https://${{ secrets.PAT }}@github.com/${{ github.repository }}.git"
+            # Set repo directory based on deployment environment
+            if [ "$DEPLOY_ENV" = "PRODUCTION" ]; then
+              REPO_DIR="/opt/genghis-routing"
+            else
+              REPO_DIR="/opt/genghis-routing-development"
+            fi
+
+            # Check if we can use the directory (must be writable)
+            if [ -d "$REPO_DIR" ] && [ ! -w "$REPO_DIR" ]; then
+              echo "Warning: $REPO_DIR exists but is not writable, using home directory..."
+              REPO_DIR="$HOME/genghis-routing-$DEPLOY_ENV"
+            elif [ ! -d "$REPO_DIR" ]; then
+              # Try to create it, fallback to home if we can't
+              mkdir -p "$REPO_DIR" 2>/dev/null || {
+                echo "Warning: Cannot create $REPO_DIR, using home directory..."
+                REPO_DIR="$HOME/genghis-routing-$DEPLOY_ENV"
+              }
+            fi
+
+            # Ensure the chosen directory exists
+            mkdir -p "$REPO_DIR"
+
+            # Ref to deploy (branch or tag)
+            DEPLOY_BRANCH="$DEPLOY_REF"
+
+             # Set environment-specific variables
+             if [ "$DEPLOY_ENV" = "PRODUCTION" ]; then
+               export COMPOSE_PROJECT_NAME="genghis-routing-prod"
+               export CONTAINER_NAME_PREFIX="genghis-routing-prod"
+               SERVER_HOST_PORT="8080"
+               FRONTEND_HOST_PORT="3000"
+               WEB_BACKEND_HOST_PORT="8000"
+             else
+               export COMPOSE_PROJECT_NAME="genghis-routing-development"
+               export CONTAINER_NAME_PREFIX="genghis-routing-development"
+               SERVER_HOST_PORT="18080"
+               FRONTEND_HOST_PORT="13000"
+               WEB_BACKEND_HOST_PORT="18000"
+             fi
+
+             echo ""
+             echo "=========================================="
+             echo "$ENV_EMOJI  Deployment Configuration"
+             echo "   Environment: $DEPLOY_ENV"
+             echo "   Branch: $DEPLOY_BRANCH"
+             echo "   Image Tag: $DEPLOY_BRANCH"
+             echo "   Project Name: $COMPOSE_PROJECT_NAME"
+             echo "   Container Prefix: $CONTAINER_NAME_PREFIX"
+             echo "   Server Port: $SERVER_HOST_PORT"
+             echo "   Frontend Port: $FRONTEND_HOST_PORT"
+             echo "   Web Backend Port: $WEB_BACKEND_HOST_PORT"
+             echo "=========================================="
+             echo ""
+
+            # Check if repository exists and is a git repo
+            if [ -d "$REPO_DIR/.git" ]; then
+              echo "Repository exists, force-updating to latest code..."
+              cd "$REPO_DIR"
+              # Update remote URL to include PAT if needed
+              CURRENT_URL=$(git remote get-url origin)
+              if [[ "$CURRENT_URL" != *"${{ secrets.PAT }}"* ]]; then
+                git remote set-url origin "$REPO_URL"
+              fi
+              # Fetch and reset to remote (handles force-pushed history)
+              git fetch origin "$DEPLOY_BRANCH"
+              git checkout "$DEPLOY_BRANCH"
+              git reset --hard "origin/$DEPLOY_BRANCH"
+            else
+              echo "Repository not found, cloning..."
+              # Remove directory if it exists but isn't a git repo (only if we can write to it)
+              if [ -d "$REPO_DIR" ] && [ -w "$REPO_DIR" ]; then
+                rm -rf "$REPO_DIR"
+                mkdir -p "$REPO_DIR"
+              fi
+              # Clone the repository
+              git -c credential.helper= clone "$REPO_URL" "$REPO_DIR"
+              cd "$REPO_DIR"
+              git checkout "$DEPLOY_BRANCH"
+            fi
+
+             # Create .env file from GitHub secrets only (requested app variables)
+             echo "Creating .env file on VM..."
+             : > .env
+             _v='${{ secrets.SUPABASE_URL }}'; echo "SUPABASE_URL=$_v" >> .env
+             _v='${{ secrets.SUPABASE_KEY }}'; echo "SUPABASE_KEY=$_v" >> .env
+             _v='${{ secrets.SUPABASE_DB_URL }}'; echo "SUPABASE_DB_URL=$_v" >> .env
+             _v='${{ secrets.BACKBOARD_KEY }}'; echo "BACKBOARD_KEY=$_v" >> .env
+             _v='${{ secrets.GOOGLE_MAPS_API_KEY }}'; echo "GOOGLE_MAPS_API_KEY=$_v" >> .env
+             _v='${{ secrets.AUTH_SECRET }}'; echo "AUTH_SECRET=$_v" >> .env
+             _v='${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}'; echo "NEXT_PUBLIC_MAPBOX_TOKEN=$_v" >> .env
+
+
+
+
+
+
+             # Export all environment variables for use throughout the deployment script
+             export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME"
+             export CONTAINER_NAME_PREFIX="$CONTAINER_NAME_PREFIX"
+             export SERVER_HOST_PORT="$SERVER_HOST_PORT"
+             export FRONTEND_HOST_PORT="$FRONTEND_HOST_PORT"
+             export WEB_BACKEND_HOST_PORT="$WEB_BACKEND_HOST_PORT"
+
+
+
+             export PAT="${{ secrets.PAT }}"
+             export REGISTRY="${{ vars.REGISTRY || secrets.REGISTRY || 'ghcr.io' }}"
+             export IMAGE_PREFIX="${{ vars.IMAGE_PREFIX || secrets.IMAGE_PREFIX || github.repository_owner }}"
+             export IMAGE_TAG="$DEPLOY_BRANCH"
+             export SERVER_PORT="${{ vars.SERVER_PORT || secrets.SERVER_PORT || '8080' }}"
+             export WEB_BACKEND_URL="http://web-backend:8000"
+             export DEPLOY_ENVIRONMENT="${{ vars.DEPLOY_ENVIRONMENT }}"
+
+
+             # Deploy web, web-backend
+            export COMPOSE_PROFILES="web,web-backend"
+            SERVICES="web web-backend"
+            export IMAGE_TAG="$DEPLOY_BRANCH"
+            echo ""
+            echo "=========================================="
+            echo "$ENV_EMOJI  Starting Deployment to $DEPLOY_ENV"
+            echo "   Services: $SERVICES"
+            echo "   Image Tag: $IMAGE_TAG"
+            echo "   Environment: $DEPLOY_ENV"
+            echo "=========================================="
+            echo ""
+
+            # Login to GitHub Container Registry
+            echo "Logging in to GitHub Container Registry..."
+            echo "${{ secrets.PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+            # Verify images exist for this ref before deploying
+            echo "Verifying images exist for $DEPLOY_ENV environment (ref: $DEPLOY_BRANCH)..."
+            REGISTRY_VAL="${REGISTRY:-ghcr.io}"
+            IMAGE_PREFIX_VAL="${IMAGE_PREFIX:-${{ github.repository_owner }}}"
+            for service in $SERVICES; do
+              IMAGE_NAME="$REGISTRY_VAL/$IMAGE_PREFIX_VAL/$service:$IMAGE_TAG"
+              echo "Checking for image: $IMAGE_NAME (Environment: $DEPLOY_ENV)"
+              if ! docker manifest inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+                echo "ERROR: Image $IMAGE_NAME not found for $DEPLOY_ENV environment. Build may have failed or image not pushed."
+                exit 1
+              fi
+              echo "✓ Image $IMAGE_NAME found for $DEPLOY_ENV environment"
+            done
+
+            # Only manage the current compose project
+            echo "Skipping cross-project container operations; only current project will be affected."
+
+            # Tear down this compose stack before bringing it up again
+            echo "Tearing down this compose stack (docker compose down)..."
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.deployed.yml down || true
+
+            # Pull latest images (using environment variable for profiles, works with both v1 and v2)
+            echo "Pulling images for ref: $DEPLOY_BRANCH (Environment: $DEPLOY_ENV)..."
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.deployed.yml pull $SERVICES
+
+            # Start services
+            echo "Starting services in $DEPLOY_ENV environment..."
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.deployed.yml up -d $SERVICES
+
+            # Show status
+            echo ""
+            echo "=========================================="
+            echo "$ENV_EMOJI  Deployment to $DEPLOY_ENV Complete!"
+            echo "=========================================="
+            echo ""
+            echo "Service status:"
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.deployed.yml ps $SERVICES
+            echo ""
+
+            # Clean up resources scoped to this compose project only
+            echo "Cleaning up project-scoped resources..."
+            docker container prune -f --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" || true
+            docker volume prune -f --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" || true
+            echo "Cleanup complete."
+
+            echo ""
+            echo "$ENV_EMOJI  Successfully deployed to $DEPLOY_ENV environment"
+            echo ""
