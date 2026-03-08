@@ -77,7 +77,7 @@ jobs:
             NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
           secrets: |
             auth_secret=${{ secrets.AUTH_SECRET }}
-            database_url=${{ secrets.DATABASE_URL }}
+
             supabase_url=${{ secrets.SUPABASE_URL }}
             supabase_key=${{ secrets.SUPABASE_KEY }}
           cache-from: type=gha

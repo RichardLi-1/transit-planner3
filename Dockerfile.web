@@ -16,11 +16,11 @@ RUN npm i --legacy-peer-deps
 COPY web/ .
 
 RUN --mount=type=secret,id=auth_secret \
-    --mount=type=secret,id=database_url \
+
     --mount=type=secret,id=supabase_url \
     --mount=type=secret,id=supabase_key \
     AUTH_SECRET="$(cat /run/secrets/auth_secret)" \
-    DATABASE_URL="$(cat /run/secrets/database_url)" \
+
     SUPABASE_URL="$(cat /run/secrets/supabase_url)" \
     SUPABASE_KEY="$(cat /run/secrets/supabase_key)" \
     npm run build
