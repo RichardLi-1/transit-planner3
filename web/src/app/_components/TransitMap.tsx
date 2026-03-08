@@ -420,7 +420,8 @@ export function TransitMap() {
   const [generatedRoute, setGeneratedRoute] = useState<GeneratedRoute | null>(null);
   const [disabledStops, setDisabledStops] = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [isBirdsEye, setIsBirdsEye] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [populationGeoJSON, setPopulationGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [drawMode, setDrawMode] = useState<DrawMode>("normal");
@@ -618,7 +619,7 @@ export function TransitMap() {
       setHasBoundary(all.features.some((f) => f.geometry.type === "Polygon"));
     });
 
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "bottom-right");
+    // NavigationControl replaced by custom React panel below
     map.addControl(new mapboxgl.ScaleControl({ unit: "metric" }), "bottom-left");
 
     map.on("load", () => {
@@ -650,9 +651,9 @@ export function TransitMap() {
             "fill-opacity": [
               "case",
               ["boolean", ["feature-state", "selected"], false],
-              0.12,
+              0.3,
               ["boolean", ["feature-state", "hovered"], false],
-              0.06,
+              0.08,
               0.02,
             ],
           },
@@ -675,13 +676,13 @@ export function TransitMap() {
             "line-width": [
               "case",
               ["boolean", ["feature-state", "selected"], false],
-              1.5,
+              3,
               0.5,
             ],
             "line-opacity": [
               "case",
               ["boolean", ["feature-state", "selected"], false],
-              0.6,
+              1,
               0.3,
             ],
           },
@@ -811,7 +812,7 @@ export function TransitMap() {
               0.8,  "rgba(253,141,60,0.9)",
               1,    "rgba(215,25,28,1)",
             ],
-            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 10, 0.85, 13, 0.3, 15, 0],
+            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 10, 0.75, 13, 0.3, 15, 0],
           },
         },
         firstLabelLayer,
@@ -873,11 +874,19 @@ export function TransitMap() {
         });
 
         map.addLayer({
+          id: `route-outline-${route.id}`,
+          type: "line",
+          source: `route-${route.id}`,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": route.color === "#FFCD00" ? "#E3A007" : route.color === "#00A650" ? "#005C2E" : route.color === "#B100CD" ? "#5B006B" : "#ffffff", "line-width": 11, "line-opacity": 0.9 },
+        });
+
+        map.addLayer({
           id: `route-line-${route.id}`,
           type: "line",
           source: `route-${route.id}`,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": route.color, "line-width": 4, "line-opacity": 1 },
+          paint: { "line-color": route.color, "line-width": 7, "line-opacity": 1 },
         });
 
         map.addLayer({
@@ -910,13 +919,13 @@ export function TransitMap() {
 
         map.on("mouseenter", `route-line-${route.id}`, () => {
           map.getCanvas().style.cursor = "pointer";
-          map.setPaintProperty(`route-line-${route.id}`, "line-width", 7);
+          map.setPaintProperty(`route-line-${route.id}`, "line-width", 10);
           setHoveredId(route.id);
         });
 
         map.on("mouseleave", `route-line-${route.id}`, () => {
           map.getCanvas().style.cursor = "";
-          map.setPaintProperty(`route-line-${route.id}`, "line-width", 4);
+          map.setPaintProperty(`route-line-${route.id}`, "line-width", 7);
           setHoveredId(null);
         });
       });
@@ -961,7 +970,7 @@ export function TransitMap() {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
-    for (const id of ["generated-route-glow", "generated-route-line", "generated-stops-dot"]) {
+    for (const id of ["generated-route-glow", "generated-route-outline", "generated-route-line", "generated-stops-dot"]) {
       if (map.getLayer(id)) map.removeLayer(id);
     }
     for (const id of ["generated-route", "generated-stops"]) {
@@ -1005,6 +1014,14 @@ export function TransitMap() {
         "line-opacity": 0.18,
         "line-blur": 8,
       },
+    });
+
+    map.addLayer({
+      id: "generated-route-outline",
+      type: "line",
+      source: "generated-route",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": "#ffffff", "line-width": 9, "line-opacity": 0.9 },
     });
 
     map.addLayer({
@@ -1256,6 +1273,42 @@ export function TransitMap() {
             onRegenerate={handleGenerate}
           />
         ) : null}
+      </div>
+
+      {/* Custom map controls — bottom right */}
+      <div className="pointer-events-none absolute right-[10px] bottom-[30px] flex flex-col gap-1">
+        {/* Bird's eye toggle */}
+        <button
+          onClick={() => {
+            const map = mapRef.current;
+            if (!map) return;
+            const next = !isBirdsEye;
+            setIsBirdsEye(next);
+            map.easeTo({ pitch: next ? 0 : 40, bearing: next ? 0 : -10, duration: 600 });
+          }}
+          title="Bird's eye view"
+          className={`pointer-events-auto flex h-[38px] w-[38px] items-center justify-center rounded-md shadow transition-all ${
+            isBirdsEye ? "bg-stone-800 text-white" : "bg-white text-stone-600 hover:bg-stone-50"
+          }`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        {/* Zoom controls */}
+        <div className="pointer-events-auto flex flex-col overflow-hidden rounded-md shadow">
+          <button
+            onClick={() => mapRef.current?.zoomIn()}
+            title="Zoom in"
+            className="flex h-[38px] w-[38px] items-center justify-center bg-white text-stone-600 text-lg font-light hover:bg-stone-50 border-b border-stone-200"
+          >+</button>
+          <button
+            onClick={() => mapRef.current?.zoomOut()}
+            title="Zoom out"
+            className="flex h-[38px] w-[38px] items-center justify-center bg-white text-stone-600 text-lg font-light hover:bg-stone-50"
+          >−</button>
+        </div>
       </div>
 
       {/* Generate Route — bottom centre, only visible when an area is selected */}
