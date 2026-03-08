@@ -144,7 +144,7 @@ function NeighbourhoodPanel({
       </div>
 
       <div className="px-5 pt-4 pb-5 space-y-4">
-        <h2 className="text-base font-semibold text-stone-800">{name}</h2>
+        <h2 className="text-lg font-semibold text-stone-800">{name}</h2>
 
         {data ? (
           <>
@@ -172,7 +172,7 @@ function NeighbourhoodPanel({
               {/* Connectivity */}
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-stone-500">How connected it is</span>
+                  <span className="text-stone-500">Transit connectivity</span>
                   <span className="font-semibold text-stone-800">{data.connectivityScore}/10</span>
                 </div>
                 <StatBar value={data.connectivityScore} max={10} color="#6366f1" />
@@ -206,9 +206,29 @@ function NeighbourhoodPanel({
 
 // ─── existing route panel ────────────────────────────────────────────────────
 
-function RoutePanel({ route, selectedStop, stationPopulations, onClose }: { route: Route; selectedStop: string | null; stationPopulations: Map<string, number>; onClose: () => void }) {
+function RoutePanel({
+  route,
+  selectedStop,
+  stationPopulations,
+  extraStops,
+  isCustomLine,
+  onDeleteStop,
+  onDeleteLine,
+  onClose,
+}: {
+  route: Route;
+  selectedStop: string | null;
+  stationPopulations: Map<string, number>;
+  extraStops: { name: string; coords: [number, number] }[];
+  isCustomLine?: boolean;
+  onDeleteStop: (name: string) => void;
+  onDeleteLine?: () => void;
+  onClose: () => void;
+}) {
   const rawPop = selectedStop ? stationPopulations.get(selectedStop) : undefined;
   const popServed = rawPop !== undefined ? Math.max(2314, rawPop) : undefined;
+  const allStops = [...route.stops, ...extraStops];
+  const extraNames = new Set(extraStops.map((s) => s.name));
 
   return (
     <div className="pointer-events-auto flex h-full w-80 flex-col overflow-hidden rounded-[30px] bg-white" style={{ border: "0.93px solid #BEB7B4" }}>
@@ -253,23 +273,59 @@ function RoutePanel({ route, selectedStop, stationPopulations, onClose }: { rout
         </p>
       </div>
 
+      {isCustomLine && onDeleteLine && (
+        <div className="mx-5 mb-3">
+          <button
+            onClick={onDeleteLine}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+          >
+            <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="currentColor">
+              <path fillRule="evenodd" d="M6 1a1.75 1.75 0 0 0-1.736 1.502H2.75a.75.75 0 0 0 0 1.5h.148l.465 6.52A1.75 1.75 0 0 0 5.11 12h3.78a1.75 1.75 0 0 0 1.747-1.478l.465-6.52h.148a.75.75 0 0 0 0-1.5H9.736A1.75 1.75 0 0 0 8 1H6Zm1 1.5a.25.25 0 0 0-.247.215L6.5 2.5h1l-.253-.285A.25.25 0 0 0 7 2.5Zm-1.5 3a.5.5 0 0 1 1 0l-.2 4a.3.3 0 0 1-.6 0l-.2-4Zm2.5 0a.5.5 0 0 1 1 0l-.2 4a.3.3 0 0 1-.6 0l-.2-4Z" clipRule="evenodd"/>
+            </svg>
+            Delete line
+          </button>
+        </div>
+      )}
+
       <div className="mt-2 flex-1 overflow-y-auto px-5 pb-5">
         <p className="mb-2 text-[11px] font-semibold tracking-widest text-stone-400 uppercase">
-          Stops ({route.stops.length})
+          Stops ({allStops.length})
         </p>
         <ol className="relative border-l-2" style={{ borderColor: route.color + "44" }}>
-          {route.stops.map((stop, i) => (
-            <li key={stop.name} className="mb-0 flex items-center">
-              <span
-                className="absolute -left-[5px] h-2.5 w-2.5 rounded-full border-2 bg-white"
-                style={{
-                  borderColor:
-                    i === 0 || i === route.stops.length - 1 ? route.color : route.color + "88",
-                }}
-              />
-              <span className={`py-1.5 pl-4 text-sm ${stop.name === selectedStop ? "font-bold text-stone-900" : "text-stone-700"}`}>{stop.name}</span>
-            </li>
-          ))}
+          {allStops.map((stop, i) => {
+            const isExtra = extraNames.has(stop.name);
+            return (
+              <li key={stop.name} className="group mb-0 flex items-center justify-between">
+                <div className="flex items-center min-w-0">
+                  <span
+                    className="absolute -left-[5px] h-2.5 w-2.5 rounded-full border-2 bg-white"
+                    style={{
+                      borderColor:
+                        i === 0 || i === allStops.length - 1
+                          ? route.color
+                          : isExtra
+                            ? route.color + "cc"
+                            : route.color + "88",
+                    }}
+                  />
+                  <span className={`py-1.5 pl-4 text-sm ${stop.name === selectedStop ? "font-bold text-stone-900" : isExtra ? "text-stone-600 italic" : "text-stone-700"}`}>
+                    {stop.name}
+                  </span>
+                </div>
+                {isExtra && (
+                  <button
+                    onClick={() => onDeleteStop(stop.name)}
+                    className="mr-1 shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-stone-300 hover:bg-red-50 hover:text-red-400 transition-all"
+                    title="Remove stop"
+                  >
+                    <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 1l10 10M11 1L1 11"/>
+                    </svg>
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </div>
     </div>
@@ -450,6 +506,165 @@ function GeneratedRoutePanel({
   );
 }
 
+// ─── station popup ────────────────────────────────────────────────────────────
+
+const PRESET_COLORS = ["#6366f1","#ef4444","#f59e0b","#22c55e","#0ea5e9","#ec4899","#8b5cf6","#14b8a6","#f97316","#64748b"];
+
+function StationPopup({
+  popup,
+  allRoutes,
+  isDeletable,
+  onClose,
+  onDelete,
+  onAddTransfer,
+}: {
+  popup: { name: string; routeId: string; x: number; y: number };
+  allRoutes: Route[];
+  isDeletable: boolean;
+  onClose: () => void;
+  onDelete: () => void;
+  onAddTransfer: (targetRouteId: string) => void;
+}) {
+  const currentRoute = allRoutes.find((r) => r.id === popup.routeId);
+  const otherRoutes = allRoutes.filter((r) => r.id !== popup.routeId);
+  return (
+    <div
+      className="pointer-events-auto absolute z-20 w-52 rounded-xl border border-stone-200 bg-white p-3 shadow-lg"
+      style={{ left: popup.x, top: popup.y, transform: "translate(-50%, calc(-100% - 12px))" }}
+    >
+      {/* Arrow */}
+      <div
+        className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent"
+        style={{ borderTopColor: "#e7e5e4" }}
+      />
+      <div
+        className="absolute left-1/2 -bottom-[5px] -translate-x-1/2 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent"
+        style={{ borderTopColor: "#ffffff" }}
+      />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="h-2.5 w-5 shrink-0 rounded-full"
+            style={{ background: currentRoute?.color ?? "#94a3b8" }}
+          />
+          <span className="truncate text-sm font-semibold text-stone-800">{popup.name}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {isDeletable && (
+            <button
+              onClick={onDelete}
+              title="Remove stop"
+              className="rounded p-0.5 text-stone-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+            >
+              <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="currentColor">
+                <path fillRule="evenodd" d="M6 1a1.75 1.75 0 0 0-1.736 1.502H2.75a.75.75 0 0 0 0 1.5h.148l.465 6.52A1.75 1.75 0 0 0 5.11 12h3.78a1.75 1.75 0 0 0 1.747-1.478l.465-6.52h.148a.75.75 0 0 0 0-1.5H9.736A1.75 1.75 0 0 0 8 1H6Zm1 1.5a.25.25 0 0 0-.247.215L6.5 2.5h1l-.253-.285A.25.25 0 0 0 7 2.5Zm-1.5 3a.5.5 0 0 1 1 0l-.2 4a.3.3 0 0 1-.6 0l-.2-4Zm2.5 0a.5.5 0 0 1 1 0l-.2 4a.3.3 0 0 1-.6 0l-.2-4Z" clipRule="evenodd"/>
+              </svg>
+            </button>
+          )}
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
+            <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M1 1l10 10M11 1L1 11"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      {otherRoutes.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+            Add transfer to
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {otherRoutes.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => onAddTransfer(r.id)}
+                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                style={{ background: r.color, color: r.textColor }}
+              >
+                <span>{r.shortName}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── new line modal ───────────────────────────────────────────────────────────
+
+function NewLineModal({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: (name: string, color: string, type: Route["type"]) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(PRESET_COLORS[0]!);
+  const [type, setType] = useState<Route["type"]>("subway");
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div className="relative w-72 rounded-2xl bg-white p-5 shadow-xl">
+        <h3 className="mb-4 text-base font-semibold text-stone-800">New Line</h3>
+        <input
+          autoFocus
+          className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400"
+          placeholder="Line name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), color, type); }}
+        />
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">Type</p>
+          <div className="flex gap-2">
+            {(["subway","streetcar","bus"] as Route["type"][]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setType(t)}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium capitalize transition-all ${
+                  type === t ? "border-stone-800 bg-stone-800 text-white" : "border-stone-200 text-stone-500 hover:border-stone-400"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">Color</p>
+          <div className="flex flex-wrap gap-2">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`h-6 w-6 rounded-full transition-transform ${color === c ? "scale-125 ring-2 ring-offset-1 ring-stone-400" : "hover:scale-110"}`}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-sm text-stone-500 hover:text-stone-700"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { if (name.trim()) onConfirm(name.trim(), color, type); }}
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: color }}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── main map component ──────────────────────────────────────────────────────
 
 export function TransitMap() {
@@ -494,9 +709,22 @@ export function TransitMap() {
   const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number } | null>(null);
   const genIdxRef = useRef(0);
 
+  // ── line-editor state
+  const [addStationToLine, setAddStationToLine] = useState<string | null>(null);
+  const [routeExtraStops, setRouteExtraStops] = useState<Map<string, { name: string; coords: [number, number] }[]>>(new Map());
+  const [customLines, setCustomLines] = useState<Route[]>([]);
+  const [stationPopup, setStationPopup] = useState<{ name: string; routeId: string; x: number; y: number; coords: [number, number] } | null>(null);
+  const [showNewLineModal, setShowNewLineModal] = useState(false);
+  const stopCounterRef = useRef(1);
+  const customLineCounterRef = useRef(1);
+  const historyRef = useRef<Map<string, { name: string; coords: [number, number] }[]>[]>([]);
+
   // Refs for use inside map event callbacks (avoid stale closure)
   const drawModeRef = useRef<DrawMode>("normal");
   const selectedNeighbourhoodsRef = useRef<Set<string>>(new Set());
+  const addStationToLineRef = useRef<string | null>(null);
+  const customLinesRef = useRef<Route[]>([]);
+  const routeExtraStopsRef = useRef<Map<string, { name: string; coords: [number, number] }[]>>(new Map());
   // Blocks neighbourhood clicks for one tick after a polygon is completed,
   // preventing the closing double-click from immediately selecting a neighbourhood.
   const justCompletedBoundaryRef = useRef(false);
@@ -508,6 +736,25 @@ export function TransitMap() {
   useEffect(() => {
     selectedNeighbourhoodsRef.current = selectedNeighbourhoods;
   }, [selectedNeighbourhoods]);
+
+  useEffect(() => {
+    addStationToLineRef.current = addStationToLine;
+  }, [addStationToLine]);
+
+  useEffect(() => {
+    customLinesRef.current = customLines;
+  }, [customLines]);
+
+  useEffect(() => {
+    routeExtraStopsRef.current = routeExtraStops;
+  }, [routeExtraStops]);
+
+  function snapshotHistory() {
+    historyRef.current.push(
+      new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]]))
+    );
+  }
+
 
   function handleGenerate() {
     if (isGenerating) return;
@@ -570,6 +817,33 @@ export function TransitMap() {
     setSelectedNeighbourhoods(new Set());
     setDrawMode("normal");
     drawModeRef.current = "normal";
+  }
+
+  function handleDeleteCustomLine(routeId: string) {
+    const map = mapRef.current;
+    if (map) {
+      [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-dot-${routeId}`].forEach((id) => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      [`route-${routeId}`, `stops-${routeId}`].forEach((id) => {
+        if (map.getSource(id)) map.removeSource(id);
+      });
+    }
+    setCustomLines((prev) => prev.filter((r) => r.id !== routeId));
+    setRouteExtraStops((prev) => { const next = new Map(prev); next.delete(routeId); return next; });
+    if (addStationToLine === routeId) setAddStationToLine(null);
+    setSelectedRoute(null);
+    setSelectedStop(null);
+  }
+
+  function handleDeleteStop(stopName: string, routeId: string) {
+    snapshotHistory();
+    setRouteExtraStops((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(routeId) ?? [];
+      next.set(routeId, existing.filter((s) => s.name !== stopName));
+      return next;
+    });
   }
 
   function handleToggleStop(name: string) {
@@ -1054,11 +1328,13 @@ export function TransitMap() {
           setHoveredId(null);
         });
 
-        // Station dot click — open route panel with station selected
+        // Station dot click — show popup and open sidebar
         map.on("click", `stops-dot-${route.id}`, (e) => {
           const name = e.features?.[0]?.properties?.name as string | undefined;
           if (!name) return;
           e.originalEvent.stopPropagation();
+          const { x, y } = e.point;
+          setStationPopup({ name, routeId: route.id, x, y, coords: [e.lngLat.lng, e.lngLat.lat] });
           setSelectedRoute(route);
           setSelectedStop(name);
         });
@@ -1072,6 +1348,45 @@ export function TransitMap() {
         });
       });
 
+      // Map-level click: add station to selected line, or close popup
+      map.on("click", (e) => {
+        const stopLayers = (map.getStyle()?.layers ?? [])
+          .filter((l) => l.id.startsWith("stops-dot-"))
+          .map((l) => l.id);
+        const hitStop = stopLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: stopLayers }).length > 0;
+
+        if (!hitStop) setStationPopup(null);
+
+        const lineId = addStationToLineRef.current;
+        if (lineId && !hitStop) {
+          const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          const name = `Stop ${stopCounterRef.current++}`;
+          snapshotHistory();
+          setRouteExtraStops((prev) => {
+            const next = new Map(prev);
+            const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === lineId);
+            const baseStops = route?.stops ?? [];
+            const extraStops = next.get(lineId) ?? [];
+            const allCurrent = [...baseStops, ...extraStops];
+            const newStop = { name, coords };
+            if (allCurrent.length === 0) {
+              next.set(lineId, [newStop]);
+            } else {
+              const first = allCurrent[0]!;
+              const last = allCurrent[allCurrent.length - 1]!;
+              const dFirst = haversineKm(coords, first.coords);
+              const dLast  = haversineKm(coords, last.coords);
+              // Prepend if closer to the first terminus, else append
+              next.set(lineId, dFirst < dLast ? [newStop, ...extraStops] : [...extraStops, newStop]);
+            }
+            return next;
+          });
+        }
+      });
+
+      // Close popup when map moves
+      map.on("move", () => setStationPopup(null));
+
       setMapLoaded(true);
     });
 
@@ -1083,6 +1398,13 @@ export function TransitMap() {
         setHasBoundary(false);
         setDrawMode("normal");
         drawModeRef.current = "normal";
+      } else if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        const prev = historyRef.current.pop();
+        if (prev !== undefined) {
+          stopCounterRef.current = Math.max(1, stopCounterRef.current - 1);
+          setRouteExtraStops(prev);
+        }
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -1225,6 +1547,61 @@ export function TransitMap() {
     void hoveredId;
   }, [hoveredId]);
 
+  // ── update stop sources when extra stops are added
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    routeExtraStops.forEach((extraStops, routeId) => {
+      const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === routeId);
+      if (!route) return;
+      const allStops = [...route.stops, ...extraStops];
+      const stopSrc = map.getSource(`stops-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+      if (stopSrc) stopSrc.setData(stopsToGeoJSON({ ...route, stops: allStops }));
+      // Always update the route line geometry to include extra stops
+      const lineSrc = map.getSource(`route-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+      if (lineSrc) {
+        if (allStops.length >= 2) {
+          lineSrc.setData(routeToGeoJSON({ ...route, stops: allStops, shape: undefined }));
+        } else if (extraStops.length === 0 && (route.shape || route.stops.length >= 2)) {
+          // No extra stops left — restore original geometry
+          lineSrc.setData(routeToGeoJSON(route));
+        } else {
+          // Fewer than 2 stops total, clear the line
+          lineSrc.setData({ type: "FeatureCollection", features: [] });
+        }
+      }
+    });
+  }, [routeExtraStops, mapLoaded]);
+
+  // ── add map layers for newly created custom lines
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    customLines.forEach((route) => {
+      if (map.getSource(`route-${route.id}`)) return; // already added
+      map.addSource(`route-${route.id}`, { type: "geojson", data: routeToGeoJSON(route) });
+      map.addSource(`stops-${route.id}`, { type: "geojson", data: stopsToGeoJSON(route) });
+      map.addLayer({ id: `route-shadow-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": 10, "line-opacity": 0.12, "line-blur": 4 } });
+      map.addLayer({ id: `route-outline-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": 11, "line-opacity": 0.9 } });
+      map.addLayer({ id: `route-line-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": 7, "line-opacity": 1 } });
+      map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 11, paint: { "circle-radius": 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
+      map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 11, paint: { "circle-radius": 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": 2 } });
+      map.on("click", `route-line-${route.id}`, () => { setSelectedRoute(route); setSelectedStop(null); });
+      map.on("mouseenter", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; map.setPaintProperty(`route-line-${route.id}`, "line-width", 10); });
+      map.on("mouseleave", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = ""; map.setPaintProperty(`route-line-${route.id}`, "line-width", 7); });
+      map.on("click", `stops-dot-${route.id}`, (e) => {
+        const name = e.features?.[0]?.properties?.name as string | undefined;
+        if (!name) return;
+        e.originalEvent.stopPropagation();
+        setStationPopup({ name, routeId: route.id, x: e.point.x, y: e.point.y, coords: [e.lngLat.lng, e.lngLat.lat] });
+        setSelectedRoute(route);
+        setSelectedStop(name);
+      });
+      map.on("mouseenter", `stops-dot-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", `stops-dot-${route.id}`, () => { map.getCanvas().style.cursor = ""; });
+    });
+  }, [customLines, mapLoaded]);
+
   if (!TOKEN) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-stone-100">
@@ -1250,31 +1627,70 @@ export function TransitMap() {
       <div ref={containerRef} className="h-full w-full" />
 
       {/* TTC Lines legend + neighbourhood panel — top left */}
-      <div className="absolute top-5 left-5 flex flex-col gap-4">
-        <div className="rounded-xl border border-[#D7D7D7] bg-white px-6 py-5 shadow-sm">
-          <p className="mb-3 text-lg font-bold text-stone-800">
-            TTC Lines
-          </p>
-          <ul className="space-y-2">
-            {ROUTES.map((r) => (
-              <li
-                key={r.id}
-                className="flex cursor-pointer items-center gap-3 text-base text-stone-600 hover:text-stone-900"
-                onClick={() => setSelectedRoute(r)}
+      <div className="absolute top-5 left-5 flex flex-col gap-4 pointer-events-auto">
+        <div className="rounded-xl border border-[#D7D7D7] bg-white px-5 py-4 shadow-sm w-56">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-lg font-bold text-stone-800">Lines</p>
+            <button
+              onClick={() => setShowNewLineModal(true)}
+              title="New line"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200 hover:text-stone-800 text-sm font-bold leading-none"
+            >
+              +
+            </button>
+          </div>
+          {addStationToLine && (
+            <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2 py-1.5 text-xs text-indigo-700">
+              <span className="h-2 w-2 shrink-0 rounded-full animate-pulse bg-indigo-500" />
+              <span className="flex-1">Click map to add station</span>
+              <button
+                onClick={() => setAddStationToLine(null)}
+                className="font-semibold hover:text-indigo-900"
               >
-                <span className="h-3 w-7 shrink-0 rounded-full" style={{ background: r.color }} />
-                {r.name}
-              </li>
-            ))}
+                Done
+              </button>
+            </div>
+          )}
+          <ul className="space-y-1">
+            {[...ROUTES, ...customLines].map((r) => {
+              const isActive = addStationToLine === r.id;
+              return (
+                <li key={r.id} className="group flex items-center gap-2">
+                  <button
+                    title={isActive ? "Deselect line" : "Select to add stations"}
+                    onClick={() => setAddStationToLine(isActive ? null : r.id)}
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded transition-all ${
+                      isActive
+                        ? "ring-2 ring-offset-1"
+                        : "opacity-60 hover:opacity-100"
+                    }`}
+                    style={isActive ? { outline: `2px solid ${r.color}`, outlineOffset: "2px" } : {}}
+                  >
+                    <span
+                      className="h-2.5 w-5 rounded-full"
+                      style={{ background: r.color }}
+                    />
+                  </button>
+                  <button
+                    className={`flex-1 truncate text-left text-sm transition-colors ${
+                      isActive ? "font-semibold text-stone-900" : "text-stone-600 hover:text-stone-900"
+                    }`}
+                    onClick={() => setSelectedRoute(r)}
+                  >
+                    {r.name}
+                  </button>
+                </li>
+              );
+            })}
             {generatedRoute && (
               <>
                 <li className="border-t border-stone-100 pt-1.5" />
                 <li
-                  className="flex cursor-pointer items-center gap-3 text-base text-stone-600 hover:text-stone-900"
+                  className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900"
                   onClick={() => setSelectedRoute(null)}
                 >
                   <span
-                    className="h-3 w-7 shrink-0 rounded-full border-2"
+                    className="h-2.5 w-5 shrink-0 rounded-full border-2"
                     style={{ borderColor: generatedRoute.color, borderStyle: "dashed", background: "transparent" }}
                   />
                   <span className="truncate">{generatedRoute.name}</span>
@@ -1432,7 +1848,16 @@ export function TransitMap() {
         }`}
       >
         {selectedRoute ? (
-          <RoutePanel route={selectedRoute} selectedStop={selectedStop} stationPopulations={stationPopulations} onClose={() => { setSelectedRoute(null); setSelectedStop(null); }} />
+          <RoutePanel
+            route={selectedRoute}
+            selectedStop={selectedStop}
+            stationPopulations={stationPopulations}
+            extraStops={routeExtraStops.get(selectedRoute.id) ?? []}
+            isCustomLine={customLines.some((r) => r.id === selectedRoute.id)}
+            onDeleteStop={(name) => handleDeleteStop(name, selectedRoute.id)}
+            onDeleteLine={() => handleDeleteCustomLine(selectedRoute.id)}
+            onClose={() => { setSelectedRoute(null); setSelectedStop(null); }}
+          />
         ) : showGeneratedPanel ? (
           <GeneratedRoutePanel
             route={generatedRoute}
@@ -1493,6 +1918,69 @@ export function TransitMap() {
             {isGenerating ? "Generating…" : "Generate Route"}
           </button>
         </div>
+      )}
+
+      {/* Station popup */}
+      {stationPopup && (
+        <StationPopup
+          popup={stationPopup}
+          allRoutes={[...ROUTES, ...customLines]}
+          isDeletable={(routeExtraStops.get(stationPopup.routeId) ?? []).some((s) => s.name === stationPopup.name)}
+          onClose={() => setStationPopup(null)}
+          onDelete={() => { handleDeleteStop(stationPopup.name, stationPopup.routeId); setStationPopup(null); }}
+          onAddTransfer={(targetRouteId) => {
+            const { name, coords } = stationPopup;
+            // Add this station to the target line's extra stops (terminus-aware)
+            snapshotHistory();
+            setRouteExtraStops((prev) => {
+              const next = new Map(prev);
+              const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === targetRouteId);
+              const baseStops = route?.stops ?? [];
+              const extraStops = next.get(targetRouteId) ?? [];
+              // Skip if already present
+              const alreadyExists = [...baseStops, ...extraStops].some((s) => s.name === name);
+              if (alreadyExists) return prev;
+              const allCurrent = [...baseStops, ...extraStops];
+              const newStop = { name, coords };
+              if (allCurrent.length === 0) {
+                next.set(targetRouteId, [newStop]);
+              } else {
+                const first = allCurrent[0]!;
+                const last = allCurrent[allCurrent.length - 1]!;
+                const dFirst = haversineKm(coords, first.coords);
+                const dLast  = haversineKm(coords, last.coords);
+                next.set(targetRouteId, dFirst < dLast ? [newStop, ...extraStops] : [...extraStops, newStop]);
+              }
+              return next;
+            });
+            setStationPopup(null);
+          }}
+        />
+      )}
+
+      {/* New line modal */}
+      {showNewLineModal && (
+        <NewLineModal
+          onClose={() => setShowNewLineModal(false)}
+          onConfirm={(name, color, type) => {
+            const id = `custom-${customLineCounterRef.current++}`;
+            const shortName = name.slice(0, 2).toUpperCase();
+            const newRoute: Route = {
+              id,
+              name,
+              shortName,
+              color,
+              textColor: "#ffffff",
+              type,
+              description: "Custom line",
+              frequency: "—",
+              stops: [],
+            };
+            setCustomLines((prev) => [...prev, newRoute]);
+            setAddStationToLine(id);
+            setShowNewLineModal(false);
+          }}
+        />
       )}
     </div>
   );
