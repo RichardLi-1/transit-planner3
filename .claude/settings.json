@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(du -h /Users/fionafang/tiggy-ai/transit-planner/web/public/*)",
+      "Bash(grep -l \"pointInRing\\\\|haversineKm\" /Users/fionafang/tiggy-ai/transit-planner/web/src/**/*.ts*)",
+      "Bash(cat /Users/fionafang/tiggy-ai/transit-planner/web/src/app/api/auth/[...nextauth]/route.ts)",
+      "Bash(grep -r \"from \"\"zod\"\"\\\\|from ''zod''\" /Users/fionafang/tiggy-ai/transit-planner/web/src --include=\"*.ts\" --include=\"*.tsx\" -l)",
+      "Bash(grep -r \"from \"\"zod\"\"\\\\|from ''zod''\" /Users/fionafang/tiggy-ai/transit-planner/web/src/app --include=\"*.ts\" --include=\"*.tsx\" -l)"
+    ]
+  }
+}

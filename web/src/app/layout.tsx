@@ -2,8 +2,6 @@ import "~/styles/globals.css";
 
 import { type Metadata } from "next";
 
-import { TRPCReactProvider } from "~/trpc/react";
-
 export const metadata: Metadata = {
   title: "Transit Planner",
   description: "Urban transit intelligence",
@@ -21,7 +19,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;500;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       </head>
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        {children}
       </body>
     </html>
   );

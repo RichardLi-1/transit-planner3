@@ -16,17 +16,13 @@ function StatBar({ value, max, color }: { value: number; max: number; color: str
 export function GeneratedRoutePanel({
   route,
   disabledStops,
-  isGenerating,
   onToggleStop,
   onClose,
-  onRegenerate,
 }: {
   route: GeneratedRoute;
   disabledStops: Set<string>;
-  isGenerating: boolean;
   onToggleStop: (name: string) => void;
   onClose: () => void;
-  onRegenerate: () => void;
 }) {
   const { stats } = route;
   const prColor =
@@ -164,23 +160,6 @@ export function GeneratedRoutePanel({
         </ol>
       </div>
 
-      {/* Regenerate */}
-      <div className="border-t border-stone-100 px-5 py-3">
-        <button
-          onClick={onRegenerate}
-          disabled={isGenerating}
-          className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-50"
-          style={{ background: route.color }}
-        >
-          {isGenerating ? (
-            <>
-              <span className="inline-block animate-spin">⟳</span> Generating…
-            </>
-          ) : (
-            <>✦ Regenerate</>
-          )}
-        </button>
-      </div>
     </div>
   );
 }

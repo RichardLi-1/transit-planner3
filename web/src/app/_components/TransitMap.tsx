@@ -4,7 +4,6 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import mapboxgl from "mapbox-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChatPanel } from "./ChatPanel";
 import { haversineKm, computeStationPopulations, type PopRow } from "~/app/map/geo-utils";
 import {
   ROUTES,
@@ -34,10 +33,6 @@ export function TransitMap() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [generatedRoute, setGeneratedRoute] = useState<GeneratedRoute | null>(null);
   const [disabledStops, setDisabledStops] = useState<Set<string>>(new Set());
-  const [councilOpen, setCouncilOpen] = useState(false);
-  const [councilHasRun, setCouncilHasRun] = useState(false);
-  const [councilStartNew, setCouncilStartNew] = useState(false);
-  const [councilPreview, setCouncilPreview] = useState<{ color: string; stops: { name: string; coords: [number, number] }[] } | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [isBirdsEye, setIsBirdsEye] = useState(false);
   const [showTraffic, setShowTraffic] = useState(false);
@@ -150,17 +145,6 @@ export function TransitMap() {
     });
   }
 
-
-  function handleGenerate() {
-    setCouncilStartNew(true);
-    setCouncilHasRun(true);
-    setCouncilOpen(true);
-  }
-
-  function handleViewCouncil() {
-    setCouncilStartNew(false);
-    setCouncilOpen(true);
-  }
 
   function handleSetDrawMode(mode: DrawMode) {
     const draw = drawRef.current;
@@ -1034,92 +1018,6 @@ export function TransitMap() {
     });
   }, [routeExtraStops, mapLoaded]);
 
-  // ── council live preview layer ─────────────────────────────────────────────
-  const shimmerRafRef = useRef<number | null>(null);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoaded) return;
-
-    const SRC_LINE = "council-preview-line";
-    const SRC_DOTS = "council-preview-dots";
-    const LYR_SHADOW = "council-preview-shadow";
-    const LYR_LINE = "council-preview-lyr";
-    const LYR_SHIMMER = "council-preview-shimmer";
-    const LYR_DOTS = "council-preview-lyr-dots";
-
-    if (shimmerRafRef.current !== null) {
-      cancelAnimationFrame(shimmerRafRef.current);
-      shimmerRafRef.current = null;
-    }
-
-    if (!councilPreview || councilPreview.stops.length < 2) {
-      for (const id of [LYR_SHADOW, LYR_SHIMMER, LYR_LINE, LYR_DOTS]) {
-        if (map.getLayer(id)) map.removeLayer(id);
-      }
-      for (const id of [SRC_LINE, SRC_DOTS]) {
-        if (map.getSource(id)) map.removeSource(id);
-      }
-      return;
-    }
-
-    const coords = councilPreview.stops.map((s) => s.coords);
-    const lineGeoJSON: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} }],
-    };
-    const dotsGeoJSON: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: councilPreview.stops.map((s) => ({
-        type: "Feature" as const,
-        geometry: { type: "Point" as const, coordinates: s.coords },
-        properties: { name: s.name },
-      })),
-    };
-
-    if (map.getSource(SRC_LINE)) {
-      (map.getSource(SRC_LINE) as mapboxgl.GeoJSONSource).setData(lineGeoJSON);
-      (map.getSource(SRC_DOTS) as mapboxgl.GeoJSONSource).setData(dotsGeoJSON);
-    } else {
-      map.addSource(SRC_LINE, { type: "geojson", data: lineGeoJSON });
-      map.addSource(SRC_DOTS, { type: "geojson", data: dotsGeoJSON });
-      // Shadow glow
-      map.addLayer({ id: LYR_SHADOW, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": councilPreview.color, "line-width": 14, "line-opacity": 0.12, "line-blur": 6 } });
-      // Solid base line
-      map.addLayer({ id: LYR_LINE, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": councilPreview.color, "line-width": 5, "line-opacity": 0.75 } });
-      // Shimmer overlay — animated travelling highlight
-      map.addLayer({ id: LYR_SHIMMER, type: "line", source: SRC_LINE, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0, "line-dasharray": [3, 30] } });
-      // Stops
-      map.addLayer({ id: LYR_DOTS, type: "circle", source: SRC_DOTS, minzoom: 10, paint: { "circle-radius": 5, "circle-color": "#fff", "circle-stroke-color": councilPreview.color, "circle-stroke-width": 2.5, "circle-opacity": 0.9 } });
-    }
-
-    // Animate shimmer: cycle a short bright dash along the line
-    const animMap = map;
-    const PERIOD = 1800; // ms per full cycle
-    const DASH = 3;
-    const GAP = 30;
-    const TOTAL = DASH + GAP;
-    let start: number | null = null;
-    function animate(ts: number) {
-      if (!start) start = ts;
-      const t = ((ts - start) % PERIOD) / PERIOD; // 0→1
-      const offset = t * TOTAL;
-      const pre = offset % TOTAL;
-      const pattern = pre < DASH
-        ? [0, pre, DASH - pre, GAP]
-        : [0, pre, DASH, GAP - (pre - DASH)];
-      if (animMap.getLayer(LYR_SHIMMER)) {
-        animMap.setPaintProperty(LYR_SHIMMER, "line-dasharray", pattern);
-        animMap.setPaintProperty(LYR_SHIMMER, "line-opacity", 0.55 + 0.2 * Math.sin(t * Math.PI * 2));
-      }
-      shimmerRafRef.current = requestAnimationFrame(animate);
-    }
-    shimmerRafRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (shimmerRafRef.current !== null) cancelAnimationFrame(shimmerRafRef.current);
-    };
-  }, [councilPreview, mapLoaded]);
-
   // ── add map layers for newly created custom lines
   useEffect(() => {
     const map = mapRef.current;
@@ -1360,69 +1258,6 @@ export function TransitMap() {
         </div>
       )}
 
-      {/* Chat panel — bottom right, above zoom controls */}
-      <ChatPanel
-        open={councilOpen}
-        onClose={() => setCouncilOpen(false)}
-        startNew={councilStartNew}
-        neighbourhoodNames={
-          [...selectedNeighbourhoods].map(
-            (code) => neighbourhoodsGeoJSONRef.current?.features.find(
-              (f) => f.properties?.AREA_SHORT_CODE === code
-            )?.properties?.AREA_NAME ?? code
-          )
-        }
-        stationNames={[...selectedStations].map((s) => s.split("::")[0]!)}
-        existingLineStops={[...ROUTES, ...customLines].flatMap((r) =>
-          r.stops.map((s) => ({ name: s.name, coords: s.coords, route: r.name }))
-        )}
-        onRoutePreview={(route) => setCouncilPreview(route)}
-        onAddRoute={(parsed) => {
-          const id = `custom-${customLineCounterRef.current++}`;
-
-          // ── Estimate route stats from geometry ──────────────────────────────
-          const stops = parsed.stops;
-          let totalKm = 0;
-          for (let i = 1; i < stops.length; i++) {
-            totalKm += haversineKm(stops[i - 1]!.coords, stops[i]!.coords);
-          }
-          const costPerKm = parsed.type === "subway" ? 500 : parsed.type === "streetcar" ? 80 : 4; // $M/km
-          const costM = Math.round(totalKm * costPerKm);
-          const costStr = costM >= 1000
-            ? `$${(costM / 1000).toFixed(1)}B`
-            : `$${costM}M`;
-          const buildYears = parsed.type === "subway" ? Math.ceil(totalKm * 1.2 + 3) : parsed.type === "streetcar" ? Math.ceil(totalKm * 0.6 + 2) : Math.ceil(totalKm * 0.1 + 1);
-          const prRaw = parsed.prScore ?? 20; // /40 from council, default moderate
-          const prNorm = Math.round((prRaw / 40) * 10); // convert to /10
-          const approvalChance = Math.max(15, Math.min(92, 85 - prRaw * 1.5));
-          const minutesSaved = Math.round(totalKm * (parsed.type === "subway" ? 3.5 : 2));
-          const dollarsSaved = `$${(minutesSaved * 0.3).toFixed(1)}/trip`;
-
-          const newRoute: GeneratedRoute = {
-            id,
-            name: parsed.name,
-            shortName: parsed.name.slice(0, 2).toUpperCase(),
-            color: parsed.color,
-            textColor: "#ffffff",
-            type: parsed.type,
-            description: `AI-generated ${parsed.type} line · ${totalKm.toFixed(1)} km · ${stops.length} stops`,
-            frequency: parsed.type === "subway" ? "3 min" : parsed.type === "streetcar" ? "6 min" : "10 min",
-            stops: parsed.stops.map((s) => ({ name: s.name, coords: s.coords })),
-            stats: {
-              cost: costStr,
-              timeline: `${buildYears} years`,
-              costedTimeline: `${buildYears + 3}–${buildYears + 5} years`,
-              minutesSaved,
-              dollarsSaved,
-              percentageChance: Math.round(approvalChance),
-              prNightmareScore: prNorm,
-            },
-          };
-          setCustomLines((prev) => [...prev, newRoute]);
-          setGeneratedRoute(newRoute);
-        }}
-      />
-
       {/* Top-center toolbar */}
       <div className="pointer-events-none absolute top-5 left-0 right-0 flex justify-center gap-2">
         {/* Heatmap toggle */}
@@ -1594,10 +1429,8 @@ export function TransitMap() {
           <GeneratedRoutePanel
             route={generatedRoute!}
             disabledStops={disabledStops}
-            isGenerating={councilOpen}
             onToggleStop={handleToggleStop}
             onClose={() => setGeneratedRoute(null)}
-            onRegenerate={handleGenerate}
           />
         ) : null}
       </div>
@@ -1638,30 +1471,15 @@ export function TransitMap() {
         </div>
       </div>
 
-      {/* Generate Route / View Council — bottom centre */}
-      {(hasSelection || councilHasRun) && (
-        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex justify-center gap-3">
-          {hasSelection && (
-            <button
-              onClick={handleGenerate}
-              disabled={councilOpen}
-              className="pointer-events-auto flex h-13 items-center gap-3 rounded-xl bg-stone-900 px-8 text-base font-medium text-white shadow-lg transition-all hover:bg-stone-800 disabled:opacity-50"
-            >
-              <span className="text-xl">✦</span>
-              Generate Route
-            </button>
-          )}
-          {councilHasRun && !councilOpen && (
-            <button
-              onClick={handleViewCouncil}
-              className="pointer-events-auto flex h-13 items-center gap-3 rounded-xl border border-stone-300 bg-white px-6 text-base font-medium text-stone-700 shadow-lg transition-all hover:bg-stone-50"
-            >
-              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 2"/>
-              </svg>
-              View Council
-            </button>
-          )}
+      {/* Generate Route — bottom centre */}
+      {hasSelection && (
+        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex justify-center">
+          <button
+            className="pointer-events-auto flex h-13 items-center gap-3 rounded-xl bg-stone-900 px-8 text-base font-medium text-white shadow-lg transition-all hover:bg-stone-800"
+          >
+            <span className="text-xl">✦</span>
+            Generate Route
+          </button>
         </div>
       )}
 
