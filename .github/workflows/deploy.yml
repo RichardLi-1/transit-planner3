@@ -181,9 +181,9 @@ jobs:
                  golang:1.24 \
                  go run ./cmd/seed
                echo "Seed complete."
-             else
+               else
                echo "Skipping truncation (not development)."
-             fi
+               fi
 
 
 
@@ -206,17 +206,17 @@ jobs:
 
 
              # Deploy web, web-backend
-            export COMPOSE_PROFILES="web,web-backend"
-            SERVICES="web web-backend"
-            export IMAGE_TAG="$DEPLOY_BRANCH"
-            echo ""
-            echo "=========================================="
-            echo "$ENV_EMOJI  Starting Deployment to $DEPLOY_ENV"
-            echo "   Services: $SERVICES"
-            echo "   Image Tag: $IMAGE_TAG"
-            echo "   Environment: $DEPLOY_ENV"
-            echo "=========================================="
-            echo ""
+             export COMPOSE_PROFILES="web,web-backend"
+             SERVICES="web web-backend"
+             export IMAGE_TAG="$DEPLOY_BRANCH"
+             echo ""
+             echo "=========================================="
+             echo "$ENV_EMOJI  Starting Deployment to $DEPLOY_ENV"
+             echo "   Services: $SERVICES"
+             echo "   Image Tag: $IMAGE_TAG"
+             echo "   Environment: $DEPLOY_ENV"
+             echo "=========================================="
+             echo ""
 
             # Login to GitHub Container Registry
             echo "Logging in to GitHub Container Registry..."
