@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 BASE_URL = "https://app.backboard.io/api"
-API_KEY = os.environ["BACKBOARD_KEY"]
+API_KEY = os.environ.get("BACKBOARD_KEY") or os.environ["BACKBOARD_API_KEY"]
 HEADERS = {"X-API-Key": API_KEY}
 
 SYSTEM_PROMPT = """You are a transit route planning assistant for Toronto.
