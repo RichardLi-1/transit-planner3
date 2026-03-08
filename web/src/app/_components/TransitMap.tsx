@@ -14,10 +14,6 @@ import {
   type GeneratedRoute,
   type Route,
 } from "~/app/map/mock-data";
-import {
-  findNeighbourhoodPath,
-  TORONTO_NEIGHBOURHOODS,
-} from "~/app/map/toronto-neighbourhoods";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const TORONTO: [number, number] = [-79.3832, 43.6532];
@@ -75,11 +71,6 @@ function stopsToGeoJSON(route: Route): GeoJSON.FeatureCollection<GeoJSON.Point> 
   };
 }
 
-const TYPE_LABEL: Record<Route["type"], string> = {
-  subway: "Subway",
-  streetcar: "Streetcar",
-  bus: "Bus",
-};
 
 import { haversineKm, computeStationPopulations, type PopRow } from "~/app/map/geo-utils";
 
@@ -617,22 +608,6 @@ function NewLineModal({
           onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), color, type); }}
         />
         <div className="mt-3">
-          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">Type</p>
-          <div className="flex gap-2">
-            {(["subway","streetcar","bus"] as Route["type"][]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setType(t)}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium capitalize transition-all ${
-                  type === t ? "border-stone-800 bg-stone-800 text-white" : "border-stone-200 text-stone-500 hover:border-stone-400"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mt-3">
           <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">Color</p>
           <div className="flex flex-wrap gap-2">
             {PRESET_COLORS.map((c) => (
@@ -717,7 +692,7 @@ export function TransitMap() {
   const [showNewLineModal, setShowNewLineModal] = useState(false);
   const stopCounterRef = useRef(1);
   const customLineCounterRef = useRef(1);
-  const historyRef = useRef<Map<string, { name: string; coords: [number, number] }[]>[]>([]);
+  const historyRef = useRef<{ stops: Map<string, { name: string; coords: [number, number] }[]>; counter: number }[]>([]);
 
   // Refs for use inside map event callbacks (avoid stale closure)
   const drawModeRef = useRef<DrawMode>("normal");
@@ -750,9 +725,10 @@ export function TransitMap() {
   }, [routeExtraStops]);
 
   function snapshotHistory() {
-    historyRef.current.push(
-      new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]]))
-    );
+    historyRef.current.push({
+      stops: new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]])),
+      counter: stopCounterRef.current,
+    });
   }
 
 
@@ -779,8 +755,7 @@ export function TransitMap() {
     if (mode === "boundary") {
       // Clear neighbourhood selection when entering draw mode
       if (map && mapLoaded) {
-        TORONTO_NEIGHBOURHOODS.features.forEach((f) => {
-          const id = f.properties?.id as string;
+        selectedNeighbourhoodsRef.current.forEach((id) => {
           map.setFeatureState({ source: "neighbourhoods", id }, { selected: false });
         });
       }
@@ -809,8 +784,7 @@ export function TransitMap() {
       draw.changeMode("simple_select");
     }
     if (map && mapLoaded) {
-      TORONTO_NEIGHBOURHOODS.features.forEach((f) => {
-        const id = f.properties?.id as string;
+      selectedNeighbourhoodsRef.current.forEach((id) => {
         map.setFeatureState({ source: "neighbourhoods", id }, { selected: false });
       });
     }
@@ -994,8 +968,8 @@ export function TransitMap() {
       // ── Neighbourhood fill/border layers (below routes)
       map.addSource("neighbourhoods", {
         type: "geojson",
-        data: TORONTO_NEIGHBOURHOODS as GeoJSON.FeatureCollection,
-        promoteId: "id",
+        data: "/Neighbourhoods - 4326.geojson",
+        promoteId: "AREA_SHORT_CODE",
       });
 
       map.addLayer(
@@ -1058,7 +1032,7 @@ export function TransitMap() {
       map.on("mousemove", "neighbourhood-fill", (e) => {
         if (drawModeRef.current !== "select") return;
         map.getCanvas().style.cursor = "pointer";
-        const id = e.features?.[0]?.properties?.id as string | undefined;
+        const id = e.features?.[0]?.properties?.AREA_SHORT_CODE as string | undefined;
         if (!id) return;
         if (hoveredNeighbourhoodId && hoveredNeighbourhoodId !== id) {
           map.setFeatureState(
@@ -1084,9 +1058,9 @@ export function TransitMap() {
       map.on("click", "neighbourhood-fill", (e) => {
         if (drawModeRef.current !== "select") return; // "normal" and "boundary" don't select
         if (justCompletedBoundaryRef.current) return;
-        const id = e.features?.[0]?.properties?.id as string | undefined;
+        const id = e.features?.[0]?.properties?.AREA_SHORT_CODE as string | undefined;
         if (!id) return;
-        const name = e.features?.[0]?.properties?.name as string | undefined;
+        const name = e.features?.[0]?.properties?.AREA_NAME as string | undefined;
 
         const current = selectedNeighbourhoodsRef.current;
 
@@ -1102,12 +1076,8 @@ export function TransitMap() {
         } else {
           // Select — show panel for clicked neighbourhood
           setFocusedNeighbourhood({ id, name: name ?? id, lat: e.lngLat.lat, lng: e.lngLat.lng });
-          // Find BFS path from existing selection → new target, select everything in between
-          const toAdd = findNeighbourhoodPath(current, id);
-          toAdd.forEach((nid) => {
-            map.setFeatureState({ source: "neighbourhoods", id: nid }, { selected: true });
-          });
-          setSelectedNeighbourhoods((prev) => new Set([...prev, ...toAdd]));
+          map.setFeatureState({ source: "neighbourhoods", id }, { selected: true });
+          setSelectedNeighbourhoods((prev) => new Set([...prev, id]));
         }
 
         // Stop propagation so route line clicks don't fire
@@ -1402,8 +1372,8 @@ export function TransitMap() {
         e.preventDefault();
         const prev = historyRef.current.pop();
         if (prev !== undefined) {
-          stopCounterRef.current = Math.max(1, stopCounterRef.current - 1);
-          setRouteExtraStops(prev);
+          stopCounterRef.current = prev.counter;
+          setRouteExtraStops(prev.stops);
         }
       }
     };
@@ -1925,7 +1895,10 @@ export function TransitMap() {
         <StationPopup
           popup={stationPopup}
           allRoutes={[...ROUTES, ...customLines]}
-          isDeletable={(routeExtraStops.get(stationPopup.routeId) ?? []).some((s) => s.name === stationPopup.name)}
+          isDeletable={
+            customLines.some((r) => r.id === stationPopup.routeId) ||
+            (routeExtraStops.get(stationPopup.routeId) ?? []).some((s) => s.name === stationPopup.name)
+          }
           onClose={() => setStationPopup(null)}
           onDelete={() => { handleDeleteStop(stationPopup.name, stationPopup.routeId); setStationPopup(null); }}
           onAddTransfer={(targetRouteId) => {
