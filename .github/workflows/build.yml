@@ -76,8 +76,6 @@ jobs:
             NEXTAUTH_URL=${{ vars.NEXTAUTH_URL || 'https://build-placeholder.example.com' }}
             NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
           secrets: |
-            auth_secret=${{ secrets.AUTH_SECRET }}
-
             supabase_url=${{ secrets.SUPABASE_URL }}
             supabase_key=${{ secrets.SUPABASE_KEY }}
           cache-from: type=gha

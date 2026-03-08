@@ -25,8 +25,8 @@ def _get_db_log_enabled() -> bool:
 
 def _get_database_url() -> str:
     value = (
-        os.getenv("DATABASE_URL_PYTHON_RIDERSHIP", "")
-        or os.getenv("DATABASE_URL_PYTHON", "")
+        os.getenv("SUPABASE_DB_URL", "")
+        or os.getenv("SUPABASE_DB_URL", "")
     ).strip()
     if not value:
         raise RuntimeError(
