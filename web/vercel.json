@@ -1,6 +1,3 @@
 {
-  "functions": {
-    "src/app/api/council/route.ts": { "maxDuration": 300 },
-    "src/app/api/backboard/chat/route.ts": { "maxDuration": 60 }
-  }
+  "installCommand": "npm install --force"
 }
