@@ -3,7 +3,7 @@
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import mapboxgl from "mapbox-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type DrawMode = "normal" | "select" | "boundary";
 
@@ -48,6 +48,8 @@ const TYPE_LABEL: Record<Route["type"], string> = {
   streetcar: "Streetcar",
   bus: "Bus",
 };
+
+import { haversineKm, computeStationPopulations, type PopRow } from "~/app/map/geo-utils";
 
 // ─── stat bar ─────────────────────────────────────────────────────────────────
 
@@ -176,7 +178,10 @@ function NeighbourhoodPanel({
 
 // ─── existing route panel ────────────────────────────────────────────────────
 
-function RoutePanel({ route, selectedStop, onClose }: { route: Route; selectedStop: string | null; onClose: () => void }) {
+function RoutePanel({ route, selectedStop, stationPopulations, onClose }: { route: Route; selectedStop: string | null; stationPopulations: Map<string, number>; onClose: () => void }) {
+  const rawPop = selectedStop ? stationPopulations.get(selectedStop) : undefined;
+  const popServed = rawPop !== undefined ? Math.max(2314, rawPop) : undefined;
+
   return (
     <div className="pointer-events-auto flex h-full w-80 flex-col overflow-hidden rounded-[30px] bg-white shadow-2xl" style={{ border: "0.93px solid #BEB7B4" }}>
       <div className="flex items-start justify-between px-5 pt-5 pb-4">
@@ -204,6 +209,14 @@ function RoutePanel({ route, selectedStop, onClose }: { route: Route; selectedSt
       </div>
 
       <div className="mx-5 h-0.5 rounded-full" style={{ background: route.color }} />
+
+      {selectedStop && popServed !== undefined && (
+        <div className="mx-5 mt-3 rounded-xl bg-stone-50 px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase">Population Served</p>
+          <p className="mt-1 text-2xl font-bold text-stone-800">{popServed.toLocaleString()}</p>
+          <p className="text-[11px] text-stone-400">Nearest-station assignment, 5 km cutoff</p>
+        </div>
+      )}
 
       <div className="px-5 pt-3 pb-2">
         <p className="text-sm leading-relaxed text-stone-500">{route.description}</p>
@@ -424,7 +437,26 @@ export function TransitMap() {
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [populationGeoJSON, setPopulationGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [popRawData, setPopRawData] = useState<PopRow[]>([]);
   const [drawMode, setDrawMode] = useState<DrawMode>("normal");
+
+  // Voronoi: assign each population point to its nearest station (5 km cutoff)
+  const stationPopulations = useMemo(() => {
+    if (popRawData.length === 0) return new Map<string, number>();
+    // Collect all unique stations across all routes
+    const allStops: { name: string; coords: [number, number] }[] = [];
+    const seen = new Set<string>();
+    for (const route of ROUTES) {
+      for (const stop of route.stops) {
+        const key = `${stop.name}@${stop.coords[0]},${stop.coords[1]}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          allStops.push(stop);
+        }
+      }
+    }
+    return computeStationPopulations(popRawData, allStops, 5);
+  }, [popRawData]);
   const [hasBoundary, setHasBoundary] = useState(false);
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState<Set<string>>(new Set());
   const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number } | null>(null);
@@ -541,6 +573,7 @@ export function TransitMap() {
 
         const fc: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
         setPopulationGeoJSON(fc);
+        setPopRawData(rows);
 
         // Update the map source if it already exists
         const map = mapRef.current;
@@ -1263,7 +1296,7 @@ export function TransitMap() {
         }`}
       >
         {selectedRoute ? (
-          <RoutePanel route={selectedRoute} selectedStop={selectedStop} onClose={() => { setSelectedRoute(null); setSelectedStop(null); }} />
+          <RoutePanel route={selectedRoute} selectedStop={selectedStop} stationPopulations={stationPopulations} onClose={() => { setSelectedRoute(null); setSelectedStop(null); }} />
         ) : showGeneratedPanel ? (
           <GeneratedRoutePanel
             route={generatedRoute}
