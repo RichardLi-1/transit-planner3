@@ -128,6 +128,10 @@ cd web && npm run dev
 cd python_server && uvicorn api.main:app --reload
 Requires: Node.js 20+, Python 3.11+, PostgreSQL with PostGIS, Mapbox API key, Anthropic API key (via Backboard.io), ElevenLabs API key.
 ```
+
+## Inspirations
+[JPW Brand New Subway](https://jpwright.github.io/subway/): 
+
 Built At
 Hack Canada 2026 — Top 10 Google - Build with AI Track
 
