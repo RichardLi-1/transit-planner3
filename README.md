@@ -1,6 +1,6 @@
 # Transit Planner
 
-> **🏆 Winner — Hack Canada 2025**
+> **🏆 Winner — Hack Canada 2026**
 
 Transit Planner is an AI-powered urban transit planning tool that simulates a city council deliberation to design, debate, and approve new transit routes. Built for Toronto, it combines multi-agent AI, real-time geospatial visualization, and voice narration to make transit planning accessible, transparent, and engaging.
 
