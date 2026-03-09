@@ -209,22 +209,18 @@ export function StationPopup({
         </div>
       )}
       {transferableRoutes.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold text-stone-500">
-            Add transfer to
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {transferableRoutes.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => onAddTransfer(r.id)}
-                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
-                style={{ background: r.color, color: r.textColor }}
-              >
-                <span>{r.shortName}</span>
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-semibold text-stone-500 shrink-0">Add transfer to:</span>
+          {transferableRoutes.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => onAddTransfer(r.id)}
+              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+              style={{ background: r.color, color: r.textColor }}
+            >
+              <span>{r.shortName}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>

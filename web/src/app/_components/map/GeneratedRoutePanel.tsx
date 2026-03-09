@@ -56,10 +56,10 @@ export function GeneratedRoutePanel({
   return (
     <div className="pointer-events-auto flex h-full w-80 flex-col overflow-hidden rounded-2xl bg-white" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Header */}
-      <div className="flex items-start justify-between px-5 pt-5 pb-5">
+      <div className="flex items-start justify-between px-5 pt-5 pb-3">
         <div className="flex items-center gap-3 min-w-0">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold"
             style={{ background: route.color, color: route.textColor }}
           >
             {route.shortName}
@@ -68,7 +68,7 @@ export function GeneratedRoutePanel({
             {editing ? (
               <input
                 autoFocus
-                className="w-full rounded border border-stone-300 px-1 py-0.5 text-base font-semibold leading-tight text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400"
+                className="w-full rounded border border-stone-300 px-1 py-0.5 text-lg font-bold leading-tight text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400"
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
                 onBlur={commitRename}
@@ -79,7 +79,7 @@ export function GeneratedRoutePanel({
               />
             ) : (
               <h2
-                className="cursor-text truncate text-base font-semibold leading-tight text-stone-800 hover:underline"
+                className="cursor-text truncate text-lg font-bold leading-tight text-stone-800 hover:underline"
                 title="Click to rename"
                 onClick={() => { setDraftName(route.name); setEditing(true); }}
               >
@@ -109,9 +109,7 @@ export function GeneratedRoutePanel({
         </div>
       </div>
 
-      <div className="mx-5 h-0.5 rounded-full" style={{ background: route.color }} />
-
-      <div className="px-5 pt-4 pb-0">
+      <div className="px-5 pt-0 pb-4">
         <p className="text-sm leading-relaxed text-stone-500">{route.description}</p>
       </div>
 
@@ -170,11 +168,11 @@ export function GeneratedRoutePanel({
       </div>
 
       {/* Stops */}
-      <div className="mt-4 flex-1 overflow-y-auto px-5 pb-5">
+      <div className="mt-4 flex flex-1 flex-col overflow-y-auto px-5 pb-5">
         <p className="mb-2 text-xs font-semibold text-stone-500">
           Stops — click to toggle
         </p>
-        <ol className="relative border-l-2" style={{ borderColor: route.color + "44" }}>
+        <ol className="relative flex-1 border-l-2" style={{ borderColor: route.color + "44" }}>
           {route.stops.map((stop, i) => {
             const off = disabledStops.has(stop.name);
             const active = selectedStop === stop.name;

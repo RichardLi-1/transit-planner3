@@ -8,3 +8,8 @@
 html, body, * {
   font-family: var(--font-sans);
 }
+
+.mapboxgl-ctrl-logo,
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}

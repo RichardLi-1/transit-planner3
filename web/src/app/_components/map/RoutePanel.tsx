@@ -28,17 +28,17 @@ export function RoutePanel({
 
   return (
     <div className="pointer-events-auto flex h-full w-80 flex-col overflow-hidden rounded-2xl bg-white" style={{ border: "0.93px solid #BEB7B4" }}>
-      <div className="flex items-start justify-between px-5 pt-5 pb-5">
+      <div className="flex items-start justify-between px-5 pt-5 pb-4">
         <div className="flex items-center gap-3">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-bold"
             style={{ background: route.color, color: route.textColor }}
           >
             {route.shortName}
           </span>
           <div>
             {selectedStop && <p className="text-xs font-medium text-stone-500">{route.name}</p>}
-            <h2 className="text-base font-semibold leading-tight text-stone-800">{selectedStop ?? route.name}</h2>
+            <h2 className="text-lg font-bold leading-tight text-stone-800">{selectedStop ?? route.name}</h2>
           </div>
         </div>
         <button
@@ -50,10 +50,8 @@ export function RoutePanel({
         </button>
       </div>
 
-      <div className="mx-5 h-0.5 rounded-full" style={{ background: route.color }} />
-
       {selectedStop && popServed !== undefined && (
-        <div className="mx-5 mt-4 rounded-xl bg-stone-50 px-4 py-3">
+        <div className="mx-5 mt-0 rounded-xl bg-stone-50 px-4 py-3">
           <p className="text-xs font-semibold text-stone-500">Population Served</p>
           <p className="mt-1 text-2xl font-bold text-stone-800">{popServed.toLocaleString()}</p>
           <p className="text-[11px] text-stone-400">Nearest-station assignment, 5 km cutoff</p>

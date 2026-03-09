@@ -268,6 +268,7 @@ export function TransitMap() {
       stats,
     });
     setIsGenerating(false);
+    handleClearAll();
   }
 
   function snapshotHistory() {
@@ -1305,7 +1306,7 @@ export function TransitMap() {
       <div ref={containerRef} className="h-full w-full" />
 
       {/* TTC Lines legend + neighbourhood panel — top left */}
-      <div className="absolute top-5 left-5 flex flex-col gap-4 pointer-events-auto">
+      <div className="absolute top-6 left-6 flex flex-col gap-4 pointer-events-auto">
         <div className="rounded-xl border border-[#D7D7D7] bg-white px-5 py-4 shadow-sm w-64">
           <div className="mb-3">
             <p className="text-lg font-bold text-stone-800">Lines</p>
@@ -1554,7 +1555,7 @@ export function TransitMap() {
 
       {/* Side panel — only one shown at a time to prevent overlap */}
       <div
-        className={`pointer-events-none absolute right-6 bottom-6 flex items-stretch transition-all duration-300 ease-in-out ${hasSelection ? "top-16" : "top-6"} ${
+        className={`pointer-events-none absolute right-6 bottom-6 top-6 flex items-stretch transition-all duration-300 ease-in-out ${
           selectedRoute || showGeneratedPanel ? "translate-x-0" : "translate-x-[calc(100%+2.25rem)]"
         }`}
       >
