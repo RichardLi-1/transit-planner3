@@ -37,7 +37,7 @@ export function RoutePanel({
             {route.shortName}
           </span>
           <div>
-            {selectedStop && <p className="text-[11px] font-medium tracking-widest text-stone-400 uppercase">{route.name}</p>}
+            {selectedStop && <p className="text-xs font-medium text-stone-500">{route.name}</p>}
             <h2 className="text-base font-semibold leading-tight text-stone-800">{selectedStop ?? route.name}</h2>
           </div>
         </div>
@@ -54,7 +54,7 @@ export function RoutePanel({
 
       {selectedStop && popServed !== undefined && (
         <div className="mx-5 mt-3 rounded-xl bg-stone-50 px-4 py-3">
-          <p className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase">Population Served</p>
+          <p className="text-xs font-semibold text-stone-500">Population Served</p>
           <p className="mt-1 text-2xl font-bold text-stone-800">{popServed.toLocaleString()}</p>
           <p className="text-[11px] text-stone-400">Nearest-station assignment, 5 km cutoff</p>
         </div>

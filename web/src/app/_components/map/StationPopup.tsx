@@ -189,7 +189,7 @@ export function StationPopup({
 
       {connectedRoutes.length > 0 && (
         <div className="mb-2">
-          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+          <p className="mb-1.5 text-xs font-semibold text-stone-500">
             Connections
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -210,7 +210,7 @@ export function StationPopup({
       )}
       {transferableRoutes.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+          <p className="mb-1.5 text-xs font-semibold text-stone-500">
             Add transfer to
           </p>
           <div className="flex flex-wrap gap-1.5">

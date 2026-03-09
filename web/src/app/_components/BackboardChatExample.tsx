@@ -72,7 +72,7 @@ export function BackboardChatExample() {
                     : "mr-8 bg-white text-stone-900"
                 }`}
               >
-                <div className="mb-1 text-xs font-semibold uppercase text-stone-500">
+                <div className="mb-1 text-xs font-semibold text-stone-500">
                   {msg.role}
                 </div>
                 <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
@@ -81,7 +81,7 @@ export function BackboardChatExample() {
           )}
           {streamingText && (
             <div className="mr-8 rounded-lg bg-white p-3 text-stone-900">
-              <div className="mb-1 text-xs font-semibold uppercase text-stone-500">
+              <div className="mb-1 text-xs font-semibold text-stone-500">
                 assistant (streaming...)
               </div>
               <div className="whitespace-pre-wrap text-sm">{streamingText}</div>
