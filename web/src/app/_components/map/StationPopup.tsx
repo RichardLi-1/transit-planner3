@@ -84,7 +84,7 @@ export function StationPopup({
   return (
     <div
       ref={popupRef}
-      className="pointer-events-auto absolute z-20 w-64 rounded-xl border border-stone-200 bg-white p-3 shadow-lg"
+      className="pointer-events-auto absolute z-20 w-56 rounded-xl border border-stone-200 bg-white p-3 shadow-lg"
       style={{ left: popup.x, top: popup.y, transform: flipDown ? "translate(-50%, 12px)" : "translate(-50%, calc(-100% - 12px))" }}
     >
       {/* Arrow */}

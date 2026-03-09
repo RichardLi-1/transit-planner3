@@ -50,8 +50,8 @@ export function NewLineModal({
           </button>
           <button
             onClick={() => { if (name.trim()) onConfirm(name.trim(), color, type); }}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: color }}
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 bg-black"
+            style={{}}
           >
             Create
           </button>

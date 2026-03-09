@@ -1306,7 +1306,7 @@ export function TransitMap() {
 
       {/* TTC Lines legend + neighbourhood panel — top left */}
       <div className="absolute top-5 left-5 flex flex-col gap-4 pointer-events-auto">
-        <div className="rounded-xl border border-[#D7D7D7] bg-white px-5 py-4 shadow-sm w-56">
+        <div className="rounded-xl border border-[#D7D7D7] bg-white px-5 py-4 shadow-sm w-64">
           <div className="mb-3">
             <p className="text-lg font-bold text-stone-800">Lines</p>
           </div>

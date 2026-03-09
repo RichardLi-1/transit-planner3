@@ -88,7 +88,7 @@ export function NeighbourhoodPanel({
   }, [geometry, popRawData, trafficFeatures]);
 
   return (
-    <div className="pointer-events-auto w-80 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
+    <div className="pointer-events-auto w-64 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Preview image */}
       <div className="relative h-36 bg-stone-200">
         {!imgSrc && <div className="absolute inset-0 animate-pulse bg-stone-200" />}
