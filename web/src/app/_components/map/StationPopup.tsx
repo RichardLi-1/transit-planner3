@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Route } from "~/app/map/mock-data";
 import { useStationSummary } from "../useStationSummary";
 
@@ -41,6 +41,17 @@ export function StationPopup({
   const [summary, setSummary] = useState<string>("");
   const [showSummary, setShowSummary] = useState(false);
 
+  // Flip popup below the point if it would be cropped at the top
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [flipDown, setFlipDown] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = popupRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setFlipDown(rect.top < 8);
+  }, [popup.x, popup.y, showSummary]);
+
   // Collect all stations for comparison
   const allStations = allRoutes.flatMap(route => 
     route.stops.map(stop => {
@@ -72,18 +83,22 @@ export function StationPopup({
 
   return (
     <div
+      ref={popupRef}
       className="pointer-events-auto absolute z-20 w-64 rounded-xl border border-stone-200 bg-white p-3 shadow-lg"
-      style={{ left: popup.x, top: popup.y, transform: "translate(-50%, calc(-100% - 12px))" }}
+      style={{ left: popup.x, top: popup.y, transform: flipDown ? "translate(-50%, 12px)" : "translate(-50%, calc(-100% - 12px))" }}
     >
       {/* Arrow */}
-      <div
-        className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent"
-        style={{ borderTopColor: "#e7e5e4" }}
-      />
-      <div
-        className="absolute left-1/2 -bottom-[5px] -translate-x-1/2 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent"
-        style={{ borderTopColor: "#ffffff" }}
-      />
+      {flipDown ? (
+        <>
+          <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent" style={{ borderBottomColor: "#e7e5e4" }} />
+          <div className="absolute left-1/2 -top-[5px] -translate-x-1/2 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent" style={{ borderBottomColor: "#ffffff" }} />
+        </>
+      ) : (
+        <>
+          <div className="absolute left-1/2 -bottom-[6px] -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent" style={{ borderTopColor: "#e7e5e4" }} />
+          <div className="absolute left-1/2 -bottom-[5px] -translate-x-1/2 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent" style={{ borderTopColor: "#ffffff" }} />
+        </>
+      )}
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span
@@ -164,7 +179,7 @@ export function StationPopup({
                 <span>Analyzing station data...</span>
               </div>
             ) : summary ? (
-              <p className="text-xs leading-relaxed text-stone-700">{summary}</p>
+              <p className="max-h-40 overflow-y-auto text-xs leading-relaxed text-stone-700">{summary}</p>
             ) : (
               <p className="text-xs text-stone-500 italic">Click to generate analysis</p>
             )}

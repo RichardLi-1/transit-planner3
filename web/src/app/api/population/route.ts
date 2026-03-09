@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const revalidate = 3600;
 import { fetchPopulationData } from "~/server/population";
 
 export async function GET() {
