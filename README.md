@@ -82,12 +82,18 @@ transit-planner/
 ├── python_server/          # FastAPI — AI council engine
 │   └── api/
 │       ├── council.py      # 6-round multi-agent orchestration
+
 │       ├── backboard.py    # LLM API wrapper (Claude via Backboard.io)
+
 │       └── data_tools.py   # PostGIS queries, neighborhood GeoJSON
+
 │
 ├── go_server/              # Routing management API
+
 ├── express_server/         # Express backend (optional services)
+
 ├── web_db/                 # Prisma schema
+
 └── python_utils/           # Shared DB models (SQLAlchemy + PostGIS)
 
 
