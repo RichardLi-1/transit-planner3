@@ -67,7 +67,7 @@ All council sessions are persisted and replayable — review past deliberations 
 
 ## Architecture
 
-transit-planner/
+transit-planner/\n
 ├── web/                    # Next.js frontend
 │   └── src/app/
 │       ├── page.tsx        # Landing page (3D globe)
