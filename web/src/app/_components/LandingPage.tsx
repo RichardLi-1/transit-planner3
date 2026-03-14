@@ -17,6 +17,7 @@ function GreatCircleOrbit({ color, normal, speed, phases, r = 6.01 }: {
   phases: number[];
   r?: number;
 }) {
+	console.log("logging the great circle")
   const R = r;
 
   // Two orthonormal basis vectors spanning the orbit plane
