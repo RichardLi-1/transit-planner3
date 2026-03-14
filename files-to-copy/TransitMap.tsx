@@ -44,8 +44,14 @@ export function TransitMap() {
   const [trafficLoading, setTrafficLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [populationGeoJSON, setPopulationGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+  console.log(populationGeoJSON
+  )
+  console.log(trafficGeoJSON)
   const [trafficGeoJSON, setTrafficGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [popRawData, setPopRawData] = useState<PopRow[]>([]);
+
+  console.log(popRawData)
+  console.log("isloading", trafficLoading, mapLoaded)
   const [drawMode, setDrawMode] = useState<DrawMode>("normal");
 
   // Voronoi: assign each population point to its nearest station (5 km cutoff)
@@ -593,7 +599,8 @@ export function TransitMap() {
         firstLabelLayer,
       );
 
-      // Population circle points — fade in as you zoom in past the heatmap
+      // Population circle points — fade in as you zoom in past the heatmapcons
+      console.log("Adding pop layer")
       map.addLayer(
         {
           id: "population-points",
@@ -628,7 +635,7 @@ export function TransitMap() {
         type: "geojson",
         data: trafficGeoJSON ?? { type: "FeatureCollection" as const, features: [] },
       });
-
+console.log("Adds traffic layer")
       map.addLayer(
         {
           id: "traffic-lines",
@@ -888,6 +895,7 @@ export function TransitMap() {
     if (map.getLayer("population-points")) {
       map.setLayoutProperty("population-points", "visibility", vis);
     }
+    console.log("Loaded heatmap")
   }, [showHeatmap, mapLoaded]);
 
   // ── traffic lines visibility toggle
