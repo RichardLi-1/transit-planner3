@@ -175,5 +175,5 @@ Built At
 Hack Canada 2026 — Top 10 Google - Build with AI Track
 
 
-##License
+## **License**
 MIT
