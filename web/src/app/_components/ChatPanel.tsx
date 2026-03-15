@@ -13,6 +13,14 @@ export type ParsedRoute = {
   prScore?: number; // /40
 };
 
+export type ToolCallEvent = {
+  tool: "search_stops_near_point" | "snap_to_nearest_stop" | "check_transfer_at_location";
+  agent: string;
+  call_id: string;
+  input: { lon: number; lat: number; radius_m?: number };
+  result: unknown; // null = pending, array/object = completed
+};
+
 type AgentState = {
   agent: string;
   role: string;
@@ -175,7 +183,7 @@ ${finalRoute ? `<h2>Final Route</h2>
   <span class="route-swatch" style="background:${finalRoute.color};"></span>
   <strong style="font-size:1rem;">${finalRoute.name}</strong>
   <span style="text-transform:capitalize;font-size:.85rem;color:#a8a29e;margin-left:.25rem;">${finalRoute.type}</span>
-  <span style="margin-left:auto;font-size:.85rem;color:#a8a29e;">${finalRoute.stops.length} stops</span>
+  <span style="margin-left:auto;font-size:.85rem;color:#a8a29e;">${finalRoute.stops.length} stations</span>
 </div>
 <ul>${stopsList}</ul><br>` : ""}
 <h2>Council Deliberation</h2>
@@ -338,7 +346,7 @@ function FinalRecommendationCard({
         <div className="flex items-center gap-2 mb-1.5">
           <span className="h-2.5 w-5 rounded-full shrink-0" style={{ background: route.color }} />
           <span className="text-[14px] font-bold text-stone-800">{route.name}</span>
-          <span className="ml-auto text-[11px] capitalize text-stone-400">{route.type} · {route.stops.length} stops</span>
+          <span className="ml-auto text-[11px] capitalize text-stone-400">{route.type} · {route.stops.length} stations</span>
         </div>
         {commissionQuote && (
           <p className="text-[12px] text-stone-600 leading-snug italic mb-2">"{commissionQuote}"</p>
@@ -371,6 +379,7 @@ export function ChatPanel({
   existingLineStops,
   onAddRoute,
   onRoutePreview,
+  onToolCall,
   routePanelOpen,
 }: {
   open: boolean;
@@ -381,6 +390,7 @@ export function ChatPanel({
   existingLineStops: { name: string; coords: [number, number]; route: string }[];
   onAddRoute: (route: ParsedRoute) => void;
   onRoutePreview?: (routes: ParsedRoute[] | null) => void;
+  onToolCall?: (evt: ToolCallEvent) => void;
   routePanelOpen?: boolean;
 }) {
   const [agentStates, setAgentStates] = useState<Record<string, AgentState>>({});
@@ -398,7 +408,7 @@ export function ChatPanel({
   });
   const [view, setView] = useState<"live" | "history" | { sessionId: string }>("live");
 
-  const [panelSize, setPanelSize] = useState({ width: 620, height: 650 });
+  const [panelSize, setPanelSize] = useState({ width: 620, height: 780 });
 
   const hasStarted = useRef(false);
   const agentStatesRef = useRef<Record<string, AgentState>>({});
@@ -562,6 +572,9 @@ export function ChatPanel({
                 setAgentStates({ ...agentStatesRef.current });
               }
 
+            } else if (evt.type === "tool_call") {
+              onToolCall?.(evt as unknown as ToolCallEvent);
+
             } else if (evt.type === "route_update") {
               const updatedRoute = evt.route as ParsedRoute;
               const round = evt.round as number | undefined;
@@ -634,8 +647,8 @@ export function ChatPanel({
 
   if (view === "history") {
     return (
-      <div className="pointer-events-auto absolute bottom-8 flex flex-col overflow-hidden rounded-2xl shadow-xl"
-        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, right: rightOffset, transition: "right 0.3s ease" }}>
+      <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
+        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
         {resizeHandle}
         <div className="flex items-center gap-2 border-b border-stone-200/40 px-4 py-3">
           <button onClick={() => setView("live")} className="text-stone-400 hover:text-stone-700">
@@ -677,8 +690,8 @@ export function ChatPanel({
     const session = sessions.find((s) => s.id === view.sessionId);
     if (!session) { setView("live"); return null; }
     return (
-      <div className="pointer-events-auto absolute bottom-8 flex flex-col overflow-hidden rounded-2xl shadow-xl"
-        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, right: rightOffset, transition: "right 0.3s ease" }}>
+      <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
+        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
         {resizeHandle}
         <div className="flex items-center gap-2 border-b border-stone-200/40 px-4 py-3">
           <button onClick={() => setView("history")} className="text-stone-400 hover:text-stone-700">
@@ -712,8 +725,8 @@ export function ChatPanel({
 
   // ── Live view ─────────────────────────────────────────────────────────────────
   return (
-    <div className="pointer-events-auto absolute bottom-8 flex flex-col overflow-hidden rounded-2xl shadow-xl"
-      style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, right: rightOffset, transition: "right 0.3s ease" }}>
+    <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
+      style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
       {resizeHandle}
       {/* Header */}
       <div className="flex items-center justify-between border-b border-stone-200/40 px-4 py-3 shrink-0">

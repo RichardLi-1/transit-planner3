@@ -16,7 +16,8 @@ import { RoutePanel } from "./map/RoutePanel";
 import { GeneratedRoutePanel } from "./map/GeneratedRoutePanel";
 import { StationPopup } from "./map/StationPopup";
 import { NewLineModal } from "./map/NewLineModal";
-import { ChatPanel, type ParsedRoute } from "./ChatPanel";
+import { ChatPanel, type ParsedRoute, type ToolCallEvent } from "./ChatPanel";
+import { UserButton } from "./UserButton";
 
 type DrawMode = "normal" | "select" | "boundary";
 
@@ -98,6 +99,16 @@ export function TransitMap() {
   const didDragStopRef = useRef(false); // suppresses click after a drag
   const stationPopupRef = useRef<typeof stationPopup>(null);
   const shimmerRafRef = useRef<number | null>(null);
+  const toolAnimRafsRef = useRef<Map<string, number>>(new Map());
+  const toolAnimTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const toolAnimFeaturesRef = useRef<GeoJSON.Feature[]>([]);
+  // Direct callback ref — called synchronously on each SSE event, bypassing React batching
+  const onToolCallRef = useRef<(evt: ToolCallEvent) => void>(() => { /* set below */ });
+  const councilHasRunRef = useRef(false);
+
+  useEffect(() => {
+    councilHasRunRef.current = councilHasRun;
+  }, [councilHasRun]);
 
   useEffect(() => {
     drawModeRef.current = drawMode;
@@ -221,7 +232,7 @@ export function TransitMap() {
     const message = [
       `Analyze this proposed Toronto subway route and produce realistic planning estimates.`,
       `Route: ${stopList}`,
-      `Total length: ${routeLengthKm.toFixed(1)} km | Stops: ${stops.length}`,
+      `Total length: ${routeLengthKm.toFixed(1)} km | Stations: ${stops.length}`,
       neighbourhoodNames.length > 0 ? `Neighbourhoods served: ${neighbourhoodNames.join(", ")}` : null,
       `Population within 2 km of each stop:\n${popLines}`,
       `\nReturn ONLY this JSON (no markdown, no extra text):\n{"description":"<2 sentences about route purpose>","cost":"<e.g. $2.1B>","timeline":"<e.g. 8 years>","costedTimeline":"<e.g. 2034>","minutesSaved":<number>,"dollarsSaved":"<e.g. $4.2M/yr>","percentageChance":<0-100>,"prNightmareScore":<0-10>}`,
@@ -275,6 +286,46 @@ export function TransitMap() {
     });
     setIsGenerating(false);
     handleClearAll();
+  }
+
+  function distToSegmentKm(p: [number, number], a: [number, number], b: [number, number]): number {
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return haversineKm(p, a);
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+    return haversineKm(p, [a[0] + t * dx, a[1] + t * dy] as [number, number]);
+  }
+
+  function bestInsertIndex(coords: [number, number], stops: { name: string; coords: [number, number] }[]): number {
+    if (stops.length === 0) return 0;
+    if (stops.length === 1) return 1; // just append for a single existing stop
+    // Default: append after last
+    let bestIdx = stops.length;
+    let bestDist = haversineKm(coords, stops[stops.length - 1]!.coords);
+    // Prepend before first
+    const dFirst = haversineKm(coords, stops[0]!.coords);
+    if (dFirst < bestDist) { bestDist = dFirst; bestIdx = 0; }
+    // Insert between segments
+    for (let i = 0; i < stops.length - 1; i++) {
+      const d = distToSegmentKm(coords, stops[i]!.coords, stops[i + 1]!.coords);
+      if (d < bestDist) { bestDist = d; bestIdx = i + 1; }
+    }
+    return bestIdx;
+  }
+
+  async function reverseGeocodeStation(lng: number, lat: number): Promise<string | null> {
+    if (!TOKEN) return null;
+    try {
+      const resp = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=address,poi&limit=1&language=en&access_token=${TOKEN}`
+      );
+      if (!resp.ok) return null;
+      const data = await resp.json() as { features: Array<{ text: string; place_name: string }> };
+      const feature = data.features[0];
+      if (!feature) return null;
+      const street = (feature.place_name.split(",")[0] ?? feature.text).trim().replace(/^\d+\s+/, "");
+      return street || null;
+    } catch { return null; }
   }
 
   function snapshotHistory() {
@@ -654,6 +705,7 @@ export function TransitMap() {
       map.on("click", "neighbourhood-fill", (e) => {
         if (drawModeRef.current !== "select") return; // "normal" and "boundary" don't select
         if (justCompletedBoundaryRef.current) return;
+        if (councilHasRunRef.current) return; // locked after Generate Route
         // Station dots sit on top of neighbourhoods — let the station handler take priority
         const stopLayers = (map.getStyle()?.layers ?? []).filter((l) => l.id.startsWith("stops-dot-")).map((l) => l.id);
         if (stopLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: stopLayers }).length > 0) return;
@@ -956,26 +1008,38 @@ export function TransitMap() {
         const lineId = addStationToLineRef.current;
         if (lineId && !hitStop) {
           const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-          const name = `Stop ${stopCounterRef.current++}`;
+          const currentCounter = stopCounterRef.current;
+          const tempName = `Station ${currentCounter}`;
           snapshotHistory();
+          stopCounterRef.current = currentCounter + 1;
           setRouteExtraStops((prev) => {
             const next = new Map(prev);
             const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === lineId);
             const baseStops = route?.stops ?? [];
             const extraStops = next.get(lineId) ?? [];
             const allCurrent = [...baseStops, ...extraStops];
-            const newStop = { name, coords };
+            const newStop = { name: tempName, coords };
             if (allCurrent.length === 0) {
               next.set(lineId, [newStop]);
             } else {
-              const first = allCurrent[0]!;
-              const last = allCurrent[allCurrent.length - 1]!;
-              const dFirst = haversineKm(coords, first.coords);
-              const dLast  = haversineKm(coords, last.coords);
-              // Prepend if closer to the first terminus, else append
-              next.set(lineId, dFirst < dLast ? [newStop, ...extraStops] : [...extraStops, newStop]);
+              // Find the best insertion point (terminus or middle of line)
+              const insertIdx = bestInsertIndex(coords, allCurrent);
+              const extraInsertIdx = Math.max(0, insertIdx - baseStops.length);
+              const newExtraStops = [...extraStops];
+              newExtraStops.splice(extraInsertIdx, 0, newStop);
+              next.set(lineId, newExtraStops);
             }
             return next;
+          });
+          // Geocode asynchronously and rename from temp name
+          void reverseGeocodeStation(coords[0], coords[1]).then((geoName) => {
+            if (!geoName) return;
+            setRouteExtraStops((prev) => {
+              const next = new Map(prev);
+              const stops = next.get(lineId) ?? [];
+              next.set(lineId, stops.map(s => s.name === tempName ? { ...s, name: geoName } : s));
+              return next;
+            });
           });
         }
       });
@@ -1213,26 +1277,23 @@ export function TransitMap() {
     void hoveredId;
   }, [hoveredId]);
 
-  // ── update stop sources when extra stops are added
+  // ── update stop sources when extra stops are added or removed (including undo)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
-    routeExtraStops.forEach((extraStops, routeId) => {
-      const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === routeId);
-      if (!route) return;
+    // Iterate ALL routes (not just those with entries) so undo-removed entries are handled
+    [...ROUTES, ...customLinesRef.current].forEach((route) => {
+      const extraStops = routeExtraStops.get(route.id) ?? [];
       const allStops = [...route.stops, ...extraStops];
-      const stopSrc = map.getSource(`stops-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+      const stopSrc = map.getSource(`stops-${route.id}`) as mapboxgl.GeoJSONSource | undefined;
       if (stopSrc) stopSrc.setData(stopsToGeoJSON({ ...route, stops: allStops }));
-      // Always update the route line geometry to include extra stops
-      const lineSrc = map.getSource(`route-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+      const lineSrc = map.getSource(`route-${route.id}`) as mapboxgl.GeoJSONSource | undefined;
       if (lineSrc) {
         if (allStops.length >= 2) {
           lineSrc.setData(routeToGeoJSON({ ...route, stops: allStops, shape: undefined }));
-        } else if (extraStops.length === 0 && (route.shape || route.stops.length >= 2)) {
-          // No extra stops left — restore original geometry
+        } else if (route.shape || route.stops.length >= 2) {
           lineSrc.setData(routeToGeoJSON(route));
         } else {
-          // Fewer than 2 stops total, clear the line
           lineSrc.setData({ type: "FeatureCollection", features: [] });
         }
       }
@@ -1325,6 +1386,101 @@ export function TransitMap() {
       if (shimmerRafRef.current !== null) cancelAnimationFrame(shimmerRafRef.current);
     };
   }, [councilPreview, mapLoaded]);
+
+  // ── tool-call map animations — callback ref (bypasses React batching) ─────
+  useEffect(() => {
+    // Keep the callback ref updated whenever map readiness changes
+    onToolCallRef.current = (evt: ToolCallEvent) => {
+      const map = mapRef.current;
+      if (!map || !mapLoaded) return;
+      const { call_id: id, tool, input, result } = evt;
+
+      const SRC = "tool-anim-src";
+      if (!map.getSource(SRC)) {
+        map.addSource(SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({ id: "tool-search-pulse", type: "circle", source: SRC, filter: ["==", ["get", "kind"], "search-center"], paint: { "circle-radius": 0, "circle-color": "transparent", "circle-stroke-color": "#ef4444", "circle-stroke-width": 2.5, "circle-stroke-opacity": 0.85 } });
+        map.addLayer({ id: "tool-search-stops", type: "circle", source: SRC, filter: ["==", ["get", "kind"], "search-stop"], paint: { "circle-radius": 5, "circle-color": "#ef4444", "circle-opacity": 0, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+        map.addLayer({ id: "tool-snap-line", type: "line", source: SRC, filter: ["==", ["get", "kind"], "snap-line"], paint: { "line-color": "#f59e0b", "line-width": 2, "line-opacity": 0.9, "line-dasharray": [4, 4] } });
+        map.addLayer({ id: "tool-snap-from", type: "circle", source: SRC, filter: ["==", ["get", "kind"], "snap-from"], paint: { "circle-radius": 6, "circle-color": "transparent", "circle-stroke-color": "#f59e0b", "circle-stroke-width": 2.5 } });
+        map.addLayer({ id: "tool-snap-to", type: "circle", source: SRC, filter: ["==", ["get", "kind"], "snap-to"], paint: { "circle-radius": 7, "circle-color": "#f59e0b", "circle-opacity": 0, "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+        map.addLayer({ id: "tool-transfer-pulse", type: "circle", source: SRC, filter: ["==", ["get", "kind"], "transfer"], paint: { "circle-radius": 14, "circle-color": "transparent", "circle-stroke-color": "#7c3aed", "circle-stroke-width": 2.5, "circle-stroke-opacity": 0 } });
+      }
+
+      const getFeats = () => toolAnimFeaturesRef.current;
+      const setFeats = (f: GeoJSON.Feature[]) => {
+        toolAnimFeaturesRef.current = f;
+        (map.getSource(SRC) as mapboxgl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: f });
+      };
+      const removeById = (cid: string) => setFeats(getFeats().filter(f => f.properties?.call_id !== cid));
+
+      const existingRaf = toolAnimRafsRef.current.get(id);
+      if (existingRaf !== undefined) cancelAnimationFrame(existingRaf);
+      const existingTimeout = toolAnimTimeoutsRef.current.get(id);
+      if (existingTimeout !== undefined) clearTimeout(existingTimeout);
+
+      if (tool === "search_stops_near_point") {
+        if (result === null) {
+          setFeats([...getFeats().filter(f => f.properties?.call_id !== id), { type: "Feature", geometry: { type: "Point", coordinates: [input.lon, input.lat] }, properties: { kind: "search-center", call_id: id } }]);
+          let start: number | null = null;
+          const animate = (ts: number) => {
+            if (!start) start = ts;
+            const prog = Math.min((ts - start) / 700, 1);
+            const ease = 1 - Math.pow(1 - prog, 3);
+            if (map.getLayer("tool-search-pulse")) { map.setPaintProperty("tool-search-pulse", "circle-radius", ease * 55); map.setPaintProperty("tool-search-pulse", "circle-stroke-opacity", (1 - ease) * 0.85); }
+            if (prog < 1) toolAnimRafsRef.current.set(id, requestAnimationFrame(animate));
+          };
+          toolAnimRafsRef.current.set(id, requestAnimationFrame(animate));
+        } else {
+          const stops = (result as { lon: number; lat: number; stop_name?: string }[] | null) ?? [];
+          setFeats([...getFeats().filter(f => f.properties?.call_id !== id), ...stops.slice(0, 8).map(s => ({ type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] }, properties: { kind: "search-stop", call_id: id } }))]);
+          let start: number | null = null;
+          const animate = (ts: number) => { if (!start) start = ts; const p = Math.min((ts - start) / 400, 1); if (map.getLayer("tool-search-stops")) map.setPaintProperty("tool-search-stops", "circle-opacity", p * 0.85); if (p < 1) toolAnimRafsRef.current.set(id, requestAnimationFrame(animate)); };
+          toolAnimRafsRef.current.set(id, requestAnimationFrame(animate));
+          toolAnimTimeoutsRef.current.set(id, setTimeout(() => { if (map.getLayer("tool-search-pulse")) map.setPaintProperty("tool-search-pulse", "circle-radius", 0); if (map.getLayer("tool-search-stops")) map.setPaintProperty("tool-search-stops", "circle-opacity", 0); removeById(id); }, 2500));
+        }
+      } else if (tool === "snap_to_nearest_stop") {
+        if (result === null) {
+          setFeats([...getFeats().filter(f => f.properties?.call_id !== id), { type: "Feature", geometry: { type: "Point", coordinates: [input.lon, input.lat] }, properties: { kind: "snap-from", call_id: id } }]);
+        } else {
+          const snap = result as { lon: number; lat: number } | null;
+          if (!snap) { removeById(id); return; }
+          setFeats([...getFeats().filter(f => f.properties?.call_id !== id), { type: "Feature", geometry: { type: "LineString", coordinates: [[input.lon, input.lat], [snap.lon, snap.lat]] }, properties: { kind: "snap-line", call_id: id } }, { type: "Feature", geometry: { type: "Point", coordinates: [input.lon, input.lat] }, properties: { kind: "snap-from", call_id: id } }, { type: "Feature", geometry: { type: "Point", coordinates: [snap.lon, snap.lat] }, properties: { kind: "snap-to", call_id: id } }]);
+          let start: number | null = null;
+          const animate = (ts: number) => { if (!start) start = ts; const t = ((ts - start) % 900) / 900; const offset = t * 8; const pre = offset % 8; const pattern = pre < 4 ? [0, pre, 4 - pre, 4] : [0, pre, 4, 4 - (pre - 4)]; if (map.getLayer("tool-snap-line")) map.setPaintProperty("tool-snap-line", "line-dasharray", pattern); if (map.getLayer("tool-snap-to")) map.setPaintProperty("tool-snap-to", "circle-opacity", 0.5 + 0.4 * Math.sin(t * Math.PI * 2)); toolAnimRafsRef.current.set(id, requestAnimationFrame(animate)); };
+          toolAnimRafsRef.current.set(id, requestAnimationFrame(animate));
+          toolAnimTimeoutsRef.current.set(id, setTimeout(() => { const raf = toolAnimRafsRef.current.get(id); if (raf !== undefined) { cancelAnimationFrame(raf); toolAnimRafsRef.current.delete(id); } if (map.getLayer("tool-snap-line")) { map.setPaintProperty("tool-snap-line", "line-opacity", 0); setTimeout(() => { if (map.getLayer("tool-snap-line")) map.setPaintProperty("tool-snap-line", "line-opacity", 0.9); }, 50); } if (map.getLayer("tool-snap-to")) map.setPaintProperty("tool-snap-to", "circle-opacity", 0); removeById(id); }, 1800));
+        }
+      } else if (tool === "check_transfer_at_location") {
+        const stops = (result as { lon: number; lat: number }[] | null) ?? [];
+        if (stops.length === 0) return;
+        const feats: GeoJSON.Feature[] = stops.slice(0, 5).map((s, i) => ({ type: "Feature", geometry: { type: "Point", coordinates: [s.lon, s.lat] }, properties: { kind: "transfer", call_id: `${id}-${i}` } }));
+        setFeats([...getFeats().filter(f => !(f.properties?.call_id as string)?.startsWith(id)), ...feats]);
+        let start: number | null = null;
+        const animate = (ts: number) => { if (!start) start = ts; const pulse = Math.abs(Math.sin(((ts - start) % 1000) / 1000 * Math.PI)); if (map.getLayer("tool-transfer-pulse")) { map.setPaintProperty("tool-transfer-pulse", "circle-radius", 8 + pulse * 14); map.setPaintProperty("tool-transfer-pulse", "circle-stroke-opacity", pulse * 0.85); } toolAnimRafsRef.current.set(id, requestAnimationFrame(animate)); };
+        toolAnimRafsRef.current.set(id, requestAnimationFrame(animate));
+        toolAnimTimeoutsRef.current.set(id, setTimeout(() => { const raf = toolAnimRafsRef.current.get(id); if (raf !== undefined) { cancelAnimationFrame(raf); toolAnimRafsRef.current.delete(id); } if (map.getLayer("tool-transfer-pulse")) map.setPaintProperty("tool-transfer-pulse", "circle-stroke-opacity", 0); setFeats(getFeats().filter(f => !(f.properties?.call_id as string)?.startsWith(id))); }, 2000));
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded]);
+
+  // ── clean up tool animations when council closes ───────────────────────────
+  useEffect(() => {
+    if (!councilOpen) {
+      toolAnimRafsRef.current.forEach((raf) => cancelAnimationFrame(raf));
+      toolAnimRafsRef.current.clear();
+      toolAnimTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      toolAnimTimeoutsRef.current.clear();
+      toolAnimFeaturesRef.current = [];
+      const map = mapRef.current;
+      if (map) {
+        for (const lyr of ["tool-search-pulse","tool-search-stops","tool-snap-line","tool-snap-from","tool-snap-to","tool-transfer-pulse"]) {
+          if (map.getLayer(lyr)) map.removeLayer(lyr);
+        }
+        if (map.getSource("tool-anim-src")) map.removeSource("tool-anim-src");
+      }
+    }
+  }, [councilOpen]);
 
   // ── add map layers for newly created custom lines
   useEffect(() => {
@@ -1486,6 +1642,7 @@ export function TransitMap() {
                     onClick={() => {
                       if (!isActive) {
                         handleSetDrawMode("normal");
+                        snapshotHistory(); // ensure undo point exists before first station
                       }
                       setAddStationToLine(isActive ? null : r.id);
                     }}
@@ -1513,19 +1670,16 @@ export function TransitMap() {
               );
             })}
             {generatedRoute && (
-              <>
-                <li className="border-t border-stone-100 pt-1.5" />
-                <li
-                  className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900"
-                  onClick={() => setSelectedRoute(null)}
-                >
-                  <span
-                    className="h-2.5 w-5 shrink-0 rounded-full border-2"
-                    style={{ borderColor: generatedRoute.color, borderStyle: "dashed", background: "transparent" }}
-                  />
-                  <span className="truncate">{generatedRoute.name}</span>
-                </li>
-              </>
+              <li
+                className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900"
+                onClick={() => setSelectedRoute(null)}
+              >
+                <span
+                  className="h-2.5 w-5 shrink-0 rounded-full"
+                  style={{ background: generatedRoute.color }}
+                />
+                <span className="truncate">{generatedRoute.name}</span>
+              </li>
             )}
           </ul>
           <button
@@ -1618,7 +1772,7 @@ export function TransitMap() {
               </svg>
             </button>
             <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
-              Normal mode
+              Explore mode
               <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
             </div>
           </div>
@@ -1645,17 +1799,18 @@ export function TransitMap() {
             </div>
           </div>
 
+          {/* Polygon boundary (temporarily hidden) */}
+          {/*
           <div className="mx-1 h-6 w-px bg-stone-200" />
 
-          {/* Polygon boundary */}
-          <div className="group relative">
+          
+           <div className="group relative">
             <button
               onClick={() => handleSetDrawMode("boundary")}
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
                 drawMode === "boundary" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
               }`}
             >
-              {/* Dashed polygon with vertex dots */}
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" className="h-4 w-4">
                 <polygon points="10,2 17,6.5 14.5,16 5.5,16 3,6.5" strokeWidth="1.6" strokeLinejoin="round" strokeDasharray="2.5 1.5" />
                 <circle cx="10" cy="2" r="1.4" fill="currentColor" stroke="none" />
@@ -1669,7 +1824,7 @@ export function TransitMap() {
               Draw boundary
               <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
             </div>
-          </div>
+          </div> */}
 
           {/* Clear button — visible when there's a drawn boundary or selected neighbourhoods */}
           {hasSelection && (
@@ -1713,7 +1868,7 @@ export function TransitMap() {
       {(selectedNeighbourhoods.size > 0 || selectedStations.size > 0) && !addStationToLine && (
         <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
           <div className="pointer-events-auto flex items-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-700 shadow-sm">
-            {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""}, {selectedStations.size} stop{selectedStations.size !== 1 ? "s" : ""} selected
+            {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""}, {selectedStations.size} station{selectedStations.size !== 1 ? "s" : ""} selected
           </div>
         </div>
       )}
@@ -1880,11 +2035,13 @@ export function TransitMap() {
           )
         }
         stationNames={[...selectedStations].map((s) => s.split("::")[0]!)}
-        existingLineStops={[...ROUTES, ...customLines].flatMap((r) =>
-          r.stops.map((s) => ({ name: s.name, coords: s.coords, route: r.name }))
-        )}
+        existingLineStops={[...ROUTES, ...customLines].flatMap((r) => {
+          const extra = routeExtraStops.get(r.id) ?? [];
+          return [...r.stops, ...extra].map((s) => ({ name: s.name, coords: s.coords, route: r.name }));
+        })}
         routePanelOpen={generatedRoute !== null}
         onRoutePreview={(routes) => setCouncilPreview(routes)}
+        onToolCall={(evt) => onToolCallRef.current(evt)}
         onAddRoute={(parsed: ParsedRoute) => {
           const id = `custom-${customLineCounterRef.current++}`;
           const stops = parsed.stops;
@@ -1901,26 +2058,52 @@ export function TransitMap() {
           const approvalChance = Math.max(15, Math.min(92, 85 - prRaw * 1.5));
           const minutesSaved = Math.round(totalKm * (parsed.type === "subway" ? 3.5 : 2));
           const dollarsSaved = `$${(minutesSaved * 0.3).toFixed(1)}/trip`;
-          const newRoute: GeneratedRoute = {
+          // Add as a custom line with stops: [] so all stops live in routeExtraStops.
+          // This ensures the terminus logic (prepend/append to extraStops) works correctly
+          // when the user clicks the map to add more stations.
+          const newCustomLine: Route = {
             id,
             name: parsed.name,
+            shortName: parsed.name.slice(0, 2).toUpperCase(),
+            color: parsed.color,
+            textColor: "#ffffff",
+            type: parsed.type,
+            description: `${costStr} · ${buildYears}yr build · Approval ${Math.round(approvalChance)}% · PR ${prNorm}/10`,
+            frequency: `−${minutesSaved}min commute`,
+            stops: [],
+          };
+          setCustomLines((prev) => [...prev, newCustomLine]);
+          // Seed extraStops with parsed stops so they render immediately
+          setRouteExtraStops((prev) => { const next = new Map(prev); next.set(id, parsed.stops); return next; });
+          // Also set generatedRoute for the stats panel
+          setGeneratedRoute({
+            id,
+            name: parsed.name,
+            shortName: parsed.name.slice(0, 2).toUpperCase(),
+            textColor: "#ffffff",
+            description: `${costStr} · ${buildYears}yr build`,
+            frequency: `−${minutesSaved}min commute`,
             color: parsed.color,
             type: parsed.type,
             stops: parsed.stops,
             stats: {
               cost: costStr,
-              buildTime: `${buildYears} yrs`,
-              ridership: `${Math.round(totalKm * 8 + stops.length * 3)}k/day`,
-              co2: `-${Math.round(totalKm * 2.1)}t/yr`,
-              approval: `${Math.round(approvalChance)}%`,
-              pr: `${prNorm}/10`,
-              commute: `−${minutesSaved}min`,
-              savings: dollarsSaved,
+              timeline: `${buildYears} yrs`,
+              costedTimeline: `${Math.ceil(buildYears * 1.3)} yrs w/ contingency`,
+              minutesSaved,
+              dollarsSaved,
+              percentageChance: Math.round(approvalChance),
+              prNightmareScore: prNorm,
             },
-          };
-          setGeneratedRoute(newRoute);
+          });
+          setCouncilHasRun(true);
         }}
       />
+
+      {/* User auth button — top right (temporarily hidden) */}
+      {/* <div className="pointer-events-none absolute top-6 right-6 flex items-center z-10">
+        <UserButton />
+      </div> */}
 
       {/* New line modal */}
       {showNewLineModal && (

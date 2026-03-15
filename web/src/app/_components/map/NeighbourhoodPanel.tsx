@@ -37,10 +37,13 @@ export function NeighbourhoodPanel({
 }) {
   // ── Street view image with localStorage cache
   const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [imgLoading, setImgLoading] = useState(true);
   useEffect(() => {
+    setImgSrc(null);
+    setImgLoading(true);
     const key = `streetview-neighbourhood-${name}`;
     const cached = localStorage.getItem(key);
-    if (cached) { setImgSrc(cached); return; }
+    if (cached) { setImgSrc(cached); setImgLoading(false); return; }
     const apiUrl = `/api/streetview?lat=${lat}&lng=${lng}`;
     fetch(apiUrl)
       .then((r) => { if (!r.ok) throw new Error("no imagery"); return r.blob(); })
@@ -52,8 +55,9 @@ export function NeighbourhoodPanel({
       .then((dataUrl) => {
         try { localStorage.setItem(key, dataUrl); } catch { /* storage full */ }
         setImgSrc(dataUrl);
+        setImgLoading(false);
       })
-      .catch(() => setImgSrc("/placeholder.png"));
+      .catch(() => setImgLoading(false));
   }, [name, lat, lng]);
 
   // ── Compute population + traffic from real data
@@ -91,7 +95,7 @@ export function NeighbourhoodPanel({
     <div className="pointer-events-auto w-64 overflow-hidden rounded-2xl bg-white shadow-sm" style={{ border: "0.93px solid #BEB7B4" }}>
       {/* Preview image */}
       <div className="relative h-36 bg-stone-200">
-        {!imgSrc && <div className="absolute inset-0 animate-pulse bg-stone-200" />}
+        {imgLoading && <div className="absolute inset-0 animate-pulse bg-stone-200" />}
         {imgSrc && (
           <img
             src={imgSrc}

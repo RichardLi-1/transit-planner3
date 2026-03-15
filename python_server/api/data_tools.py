@@ -121,6 +121,17 @@ async def get_stops_near_point(
     return await loop.run_in_executor(None, _run_stops_near_point, lon, lat, radius_m)
 
 
+async def snap_to_nearest_stop(lon: float, lat: float) -> dict[str, Any] | None:
+    """Return the single closest real TTC stop within 300 m, or None."""
+    stops = await get_stops_near_point(lon, lat, 300)
+    return stops[0] if stops else None
+
+
+async def check_transfer_at_location(lon: float, lat: float) -> list[dict[str, Any]]:
+    """Return all existing TTC stops within 400 m (for transfer detection)."""
+    return await get_stops_near_point(lon, lat, 400)
+
+
 def _neighbourhood_bbox_and_centroid(
     feature: dict,
 ) -> tuple[tuple[float, float, float, float], tuple[float, float]] | None:

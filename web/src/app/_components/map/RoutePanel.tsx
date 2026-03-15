@@ -108,7 +108,7 @@ export function RoutePanel({
                   <button
                     onClick={() => onDeleteStop(stop.name)}
                     className="mr-1 shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-stone-300 hover:bg-red-50 hover:text-red-400 transition-all"
-                    title="Remove stop"
+                    title="Remove station"
                   >
                     <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                       <path d="M1 1l10 10M11 1L1 11"/>

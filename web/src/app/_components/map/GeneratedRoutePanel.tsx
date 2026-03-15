@@ -170,7 +170,7 @@ export function GeneratedRoutePanel({
       {/* Stops */}
       <div className="mt-4 flex flex-1 flex-col overflow-y-auto px-5 pb-5">
         <p className="mb-2 text-xs font-semibold text-stone-500">
-          Stops — click to toggle
+          Stations — click to toggle
         </p>
         <ol className="relative flex-1 border-l-2" style={{ borderColor: route.color + "44" }}>
           {route.stops.map((stop, i) => {

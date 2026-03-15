@@ -111,7 +111,7 @@ export function StationPopup({
           {isDeletable && (
             <button
               onClick={onDelete}
-              title="Remove stop"
+              title="Remove station"
               className="rounded p-0.5 text-stone-300 hover:bg-red-50 hover:text-red-400 transition-colors"
             >
               <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="currentColor">

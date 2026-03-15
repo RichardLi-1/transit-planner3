@@ -114,20 +114,59 @@ transit-planner/
 
 ## Getting Started
 
+### Setup
+
 ```bash
-# Install dependencies
+# Install all dependencies (root + web workspace)
 npm install
 
-# Set up environment variables
+# Install Python dependencies
+cd python_server && pip install -r requirements.txt
+
+# Copy and fill in environment variables
 cp .env.example .env
-
-# Start the frontend
-cd web && npm run dev
-
-# Start the Python backend
-cd python_server && uvicorn api.main:app --reload
-Requires: Node.js 20+, Python 3.11+, PostgreSQL with PostGIS, Mapbox API key, Anthropic API key (via Backboard.io), ElevenLabs API key.
 ```
+
+**Frontend:**
+```bash
+cd web && npm run dev
+```
+
+**Python backend:**
+```bash
+cd python_server && uvicorn api.main:app --reload
+```
+
+Requires: Node.js 20+, Python 3.11+, PostgreSQL with PostGIS.
+
+---
+
+### Required Environment Variables
+
+**`web/.env.local`** (Next.js frontend)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox GL public token — map rendering |
+| `BACKBOARD_API_KEY` | Backboard.io API key — proxies Claude requests |
+| `ELEVENLABS_KEY` | ElevenLabs API key — agent voice narration |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_KEY` | Supabase anon/service key |
+| `PYTHON_SERVER_URL` | URL of the FastAPI backend (default: `http://localhost:8000`) |
+| `GOOGLE_MAPS_API_KEY` | Google Maps API key — Street View panel |
+| `AUTH0_SECRET` | Long random string for session encryption |
+| `AUTH0_BASE_URL` | App base URL (e.g. `http://localhost:3000`) |
+| `AUTH0_ISSUER_BASE_URL` | Auth0 domain (e.g. `https://your-tenant.auth0.com`) |
+| `AUTH0_CLIENT_ID` | Auth0 application client ID |
+| `AUTH0_CLIENT_SECRET` | Auth0 application client secret |
+
+**`python_server/.env`** (FastAPI backend)
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key — used if not routing via Backboard |
+| `BACKBOARD_KEY` | Backboard.io key — Claude via Backboard |
+| `SUPABASE_DB_URL` | PostgreSQL connection string with PostGIS |
 
 ## Inspirations
 [JPW Brand New Subway](https://jpwright.github.io/subway/)
