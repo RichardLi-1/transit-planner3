@@ -448,6 +448,7 @@ export function TransitMap() {
         setTrafficGeoJSON(fc);
         setTrafficLoading(false);
         const map = mapRef.current;
+        console.log("map",map)
         if (map) {
           const src = map.getSource("traffic") as mapboxgl.GeoJSONSource | undefined;
           if (src) src.setData(fc);
@@ -478,6 +479,7 @@ export function TransitMap() {
     });
 
     mapRef.current = map;
+    console.log(mapRef.current)
 
     const draw = new MapboxDraw({
       displayControlsDefault: false,

@@ -178,6 +178,7 @@ export default function LandingPage() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+  console.log("Setting ready")
     setReady(true);
     const t = setTimeout(() => setVisible(true), 60);
     // Prefetch map page JS bundle + heavy data assets
