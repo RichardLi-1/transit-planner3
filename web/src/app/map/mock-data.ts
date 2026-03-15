@@ -268,7 +268,7 @@ export const ROUTES: Route[] = [
 
   {
     id: "line-5",
-    name: "Line 5 – Eglinton Crosstown",
+    name: "Line 5 – Eglinton",
     shortName: "L5",
     color: "#FF8000",
     textColor: "#ffffff",

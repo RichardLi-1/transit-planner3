@@ -83,6 +83,9 @@ export function TransitMap() {
   const stopCounterRef = useRef(1);
   const customLineCounterRef = useRef(1);
   const historyRef = useRef<{ stops: Map<string, { name: string; coords: [number, number] }[]>; counter: number }[]>([]);
+  const redoStackRef = useRef<{ stops: Map<string, { name: string; coords: [number, number] }[]>; counter: number }[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Refs for use inside map event callbacks (avoid stale closure)
   const drawModeRef = useRef<DrawMode>("normal");
@@ -281,6 +284,7 @@ export function TransitMap() {
       type: "subway",
       description,
       frequency: "Every 5 min",
+      servicePattern: { headwayMinutes: 5, startHour: 6, endHour: 23, days: ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] },
       stops,
       stats,
     });
@@ -328,11 +332,45 @@ export function TransitMap() {
     } catch { return null; }
   }
 
+  function captureCurrentState() {
+    return {
+      stops: new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]])),
+      counter: stopCounterRef.current,
+    };
+  }
+
+  function applyHistoryState(state: { stops: Map<string, { name: string; coords: [number, number] }[]>; counter: number }) {
+    stopCounterRef.current = state.counter;
+    routeExtraStopsRef.current = state.stops; // sync immediately so captureCurrentState is correct on rapid calls
+    setRouteExtraStops(state.stops);
+  }
+
+  function handleUndo() {
+    const prev = historyRef.current.pop();
+    if (prev === undefined) return;
+    redoStackRef.current.push(captureCurrentState());
+    applyHistoryState(prev);
+    setCanUndo(historyRef.current.length > 0);
+    setCanRedo(true);
+  }
+
+  function handleRedo() {
+    const next = redoStackRef.current.pop();
+    if (next === undefined) return;
+    historyRef.current.push(captureCurrentState());
+    applyHistoryState(next);
+    setCanUndo(true);
+    setCanRedo(redoStackRef.current.length > 0);
+  }
+
   function snapshotHistory() {
     historyRef.current.push({
       stops: new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]])),
       counter: stopCounterRef.current,
     });
+    redoStackRef.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
   }
 
 
@@ -1017,17 +1055,18 @@ export function TransitMap() {
             const route = [...ROUTES, ...customLinesRef.current].find((r) => r.id === lineId);
             const baseStops = route?.stops ?? [];
             const extraStops = next.get(lineId) ?? [];
-            const allCurrent = [...baseStops, ...extraStops];
+            // When extraStops is non-empty it IS the full ordered sequence (includes base stops).
+            // When empty, start from baseStops. This lets us correctly insert before the first
+            // base stop, which [...baseStops, ...extraStops] rendering could never achieve.
+            const allCurrent = extraStops.length > 0 ? extraStops : baseStops;
             const newStop = { name: tempName, coords };
             if (allCurrent.length === 0) {
               next.set(lineId, [newStop]);
             } else {
               // Find the best insertion point (terminus or middle of line)
               const insertIdx = bestInsertIndex(coords, allCurrent);
-              const extraInsertIdx = Math.max(0, insertIdx - baseStops.length);
-              const newExtraStops = [...extraStops];
-              newExtraStops.splice(extraInsertIdx, 0, newStop);
-              next.set(lineId, newExtraStops);
+              const newAllStops = [...allCurrent.slice(0, insertIdx), newStop, ...allCurrent.slice(insertIdx)];
+              next.set(lineId, newAllStops);
             }
             return next;
           });
@@ -1086,8 +1125,27 @@ export function TransitMap() {
         e.preventDefault();
         const prev = historyRef.current.pop();
         if (prev !== undefined) {
+          redoStackRef.current.push({
+            stops: new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]])),
+            counter: stopCounterRef.current,
+          });
           stopCounterRef.current = prev.counter;
           setRouteExtraStops(prev.stops);
+          setCanUndo(historyRef.current.length > 0);
+          setCanRedo(true);
+        }
+      } else if (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+        e.preventDefault();
+        const next = redoStackRef.current.pop();
+        if (next !== undefined) {
+          historyRef.current.push({
+            stops: new Map([...routeExtraStopsRef.current].map(([k, v]) => [k, [...v]])),
+            counter: stopCounterRef.current,
+          });
+          stopCounterRef.current = next.counter;
+          setRouteExtraStops(next.stops);
+          setCanUndo(true);
+          setCanRedo(redoStackRef.current.length > 0);
         }
       }
     };
@@ -1284,7 +1342,7 @@ export function TransitMap() {
     // Iterate ALL routes (not just those with entries) so undo-removed entries are handled
     [...ROUTES, ...customLinesRef.current].forEach((route) => {
       const extraStops = routeExtraStops.get(route.id) ?? [];
-      const allStops = [...route.stops, ...extraStops];
+      const allStops = extraStops.length > 0 ? extraStops : route.stops;
       const stopSrc = map.getSource(`stops-${route.id}`) as mapboxgl.GeoJSONSource | undefined;
       if (stopSrc) stopSrc.setData(stopsToGeoJSON({ ...route, stops: allStops }));
       const lineSrc = map.getSource(`route-${route.id}`) as mapboxgl.GeoJSONSource | undefined;
@@ -1559,7 +1617,7 @@ export function TransitMap() {
       const baseStops = route.stops ?? [];
       const extraStops = routeExtraStopsRef.current.get(lineId) ?? [];
       const updatedExtra = extraStops.map((s) => s.name === dragging!.name ? { ...s, coords: newCoords } : s);
-      const allStops = [...baseStops, ...updatedExtra];
+      const allStops = updatedExtra.length > 0 ? updatedExtra : baseStops;
       const stopSrc = map.getSource(`stops-${lineId}`) as mapboxgl.GeoJSONSource | undefined;
       if (stopSrc) stopSrc.setData(stopsToGeoJSON({ ...route, stops: allStops }));
       const lineSrc = map.getSource(`route-${lineId}`) as mapboxgl.GeoJSONSource | undefined;
@@ -1826,6 +1884,41 @@ export function TransitMap() {
             </div>
           </div> */}
 
+          {/* Undo / Redo */}
+          <div className="mx-1 h-6 w-px bg-stone-200" />
+          <div className="group relative">
+            <button
+              onClick={handleUndo}
+              disabled={!canUndo}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-stone-50 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M3 9a6 6 0 1 1 1.5 4" />
+                <polyline points="3 4 3 9 8 9" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Undo <span className="opacity-60">⌘Z</span>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+            </div>
+          </div>
+          <div className="group relative">
+            <button
+              onClick={handleRedo}
+              disabled={!canRedo}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-stone-50 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M17 9a6 6 0 1 0-1.5 4" />
+                <polyline points="17 4 17 9 12 9" />
+              </svg>
+            </button>
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md bg-stone-800 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Redo <span className="opacity-60">⌘⇧Z</span>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-stone-800" />
+            </div>
+          </div>
+
           {/* Clear button — visible when there's a drawn boundary or selected neighbourhoods */}
           {hasSelection && (
             <>
@@ -2003,7 +2096,7 @@ export function TransitMap() {
               // Skip if already present
               const alreadyExists = [...baseStops, ...extraStops].some((s) => s.name === name);
               if (alreadyExists) return prev;
-              const allCurrent = [...baseStops, ...extraStops];
+              const allCurrent = extraStops.length > 0 ? extraStops : baseStops;
               const newStop = { name, coords };
               if (allCurrent.length === 0) {
                 next.set(targetRouteId, [newStop]);
@@ -2012,7 +2105,7 @@ export function TransitMap() {
                 const last = allCurrent[allCurrent.length - 1]!;
                 const dFirst = haversineKm(coords, first.coords);
                 const dLast  = haversineKm(coords, last.coords);
-                next.set(targetRouteId, dFirst < dLast ? [newStop, ...extraStops] : [...extraStops, newStop]);
+                next.set(targetRouteId, dFirst < dLast ? [newStop, ...allCurrent] : [...allCurrent, newStop]);
               }
               return next;
             });
@@ -2037,7 +2130,8 @@ export function TransitMap() {
         stationNames={[...selectedStations].map((s) => s.split("::")[0]!)}
         existingLineStops={[...ROUTES, ...customLines].flatMap((r) => {
           const extra = routeExtraStops.get(r.id) ?? [];
-          return [...r.stops, ...extra].map((s) => ({ name: s.name, coords: s.coords, route: r.name }));
+          const stops = extra.length > 0 ? extra : r.stops;
+          return stops.map((s) => ({ name: s.name, coords: s.coords, route: r.name }));
         })}
         routePanelOpen={generatedRoute !== null}
         onRoutePreview={(routes) => setCouncilPreview(routes)}

@@ -68,3 +68,5 @@ sorted_output.csv
 
 # Optional: uncomment if you don't commit sqlc-generated Go
 # db/db/*.go
+
+TTC Routes and Schedules Data/*
