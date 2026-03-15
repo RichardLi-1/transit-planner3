@@ -445,11 +445,33 @@ export function TransitMap() {
       .then((res) => res.json())
       .then((fc: GeoJSON.FeatureCollection) => {
         if (cancelled) return;
+        console.log("[traffic] API payload", {
+          type: fc?.type,
+          featureCount: fc?.features?.length ?? 0,
+          firstFeature: fc?.features?.[0] ?? null,
+        });
         setTrafficGeoJSON(fc);
         const map = mapRef.current;
         if (map && map.isStyleLoaded()) {
           const src = map.getSource("traffic") as mapboxgl.GeoJSONSource | undefined;
-          if (src) src.setData(fc);
+          if (src) {
+            src.setData(fc);
+            console.log("[traffic] setData from fetch", {
+              hasSource: true,
+              featureCount: fc?.features?.length ?? 0,
+              layerExists: !!map.getLayer("traffic-lines"),
+              layerVisibility: map.getLayer("traffic-lines")
+                ? map.getLayoutProperty("traffic-lines", "visibility")
+                : "missing",
+            });
+          } else {
+            console.log("[traffic] source missing during fetch setData");
+          }
+        } else {
+          console.log("[traffic] map/style not ready during fetch setData", {
+            hasMap: !!map,
+            styleLoaded: map ? map.isStyleLoaded() : false,
+          });
         }
       })
       .catch((err) => {
@@ -1027,7 +1049,19 @@ export function TransitMap() {
     const map = mapRef.current;
     if (!map || !mapLoaded || !trafficGeoJSON) return;
     const src = map.getSource("traffic") as mapboxgl.GeoJSONSource | undefined;
-    if (src) src.setData(trafficGeoJSON);
+    if (src) {
+      src.setData(trafficGeoJSON);
+      console.log("[traffic] sync effect setData", {
+        featureCount: trafficGeoJSON.features.length,
+        sourceExists: true,
+        layerExists: !!map.getLayer("traffic-lines"),
+        layerVisibility: map.getLayer("traffic-lines")
+          ? map.getLayoutProperty("traffic-lines", "visibility")
+          : "missing",
+      });
+    } else {
+      console.log("[traffic] sync effect source missing");
+    }
   }, [trafficGeoJSON, mapLoaded]);
 
   // ── population visibility toggle (heatmap + points)
@@ -1049,8 +1083,16 @@ export function TransitMap() {
     if (!map || !mapLoaded) return;
     if (map.getLayer("traffic-lines")) {
       map.setLayoutProperty("traffic-lines", "visibility", showTraffic ? "visible" : "none");
+      console.log("[traffic] toggle visibility", {
+        showTraffic,
+        appliedVisibility: map.getLayoutProperty("traffic-lines", "visibility"),
+        hasSource: !!map.getSource("traffic"),
+        sourceFeatureCount: trafficGeoJSON?.features?.length ?? 0,
+      });
+    } else {
+      console.log("[traffic] toggle attempted but layer missing", { showTraffic });
     }
-  }, [showTraffic, mapLoaded]);
+  }, [showTraffic, mapLoaded, trafficGeoJSON]);
 
   // ── generated route layer (re-renders when route or stops change)
   useEffect(() => {
