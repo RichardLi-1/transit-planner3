@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { Route } from "~/app/map/mock-data";
-import { TimetableView } from "./TimetableView";
 
 export function RoutePanel({
   route,
@@ -12,6 +11,7 @@ export function RoutePanel({
   isCustomLine,
   onDeleteStop,
   onDeleteLine,
+  onSnapToRoads,
   onClose,
 }: {
   route: Route;
@@ -21,9 +21,12 @@ export function RoutePanel({
   isCustomLine?: boolean;
   onDeleteStop: (name: string) => void;
   onDeleteLine?: () => void;
+  /** Called when the user requests road-snapping. Resolves when done, throws on error. */
+  onSnapToRoads?: () => Promise<void>;
   onClose: () => void;
 }) {
-  const [timetableOpen, setTimetableOpen] = useState(false);
+  const [snapState, setSnapState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [snapError, setSnapError] = useState<string | null>(null);
   const rawPop = selectedStop ? stationPopulations.get(selectedStop) : undefined;
   const popServed = rawPop !== undefined ? Math.max(2314, rawPop) : undefined;
   const allStops = [...route.stops, ...extraStops];
@@ -68,28 +71,65 @@ export function RoutePanel({
         </p>
       </div>
 
-      {/* Timetable — collapsible */}
-      <div className="mx-5 mt-4 rounded-xl border border-stone-100">
+      {/* Timetable — opens full page in new tab */}
+      <div className="mx-5 mt-4">
         <button
-          onClick={() => setTimetableOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-stone-500 hover:text-stone-800 transition-colors"
+          onClick={() => {
+            sessionStorage.setItem(
+              `timetable-${route.id}`,
+              JSON.stringify({ route, extraStops }),
+            );
+            window.open(`/timetable/${route.id}`, "_blank");
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 py-2 text-xs font-medium text-stone-500 hover:border-stone-400 hover:text-stone-800 transition-colors"
         >
-          <span className="flex items-center gap-1.5">
-            <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="6" cy="6" r="5" /><path d="M6 3v3l2 1.5" />
-            </svg>
-            Timetable
-          </span>
-          <svg viewBox="0 0 12 12" fill="none" className={`h-3 w-3 transition-transform ${timetableOpen ? "rotate-180" : ""}`} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4l4 4 4-4" />
+          <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="6" cy="6" r="5" /><path d="M6 3v3l2 1.5" />
+          </svg>
+          View timetable
+          <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 opacity-40" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 1h4v4M11 1L5 7M4 3H2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V8" />
           </svg>
         </button>
-        {timetableOpen && (
-          <div className="border-t border-stone-100 p-3">
-            <TimetableView route={route} extraStops={extraStops} />
-          </div>
-        )}
       </div>
+
+      {isCustomLine && onSnapToRoads && (
+        <div className="mx-5 mt-3">
+          <button
+            disabled={snapState === "loading"}
+            onClick={() => {
+              setSnapState("loading");
+              setSnapError(null);
+              onSnapToRoads()
+                .then(() => setSnapState("done"))
+                .catch((err: unknown) => {
+                  setSnapState("error");
+                  setSnapError(err instanceof Error ? err.message : "Snap failed.");
+                });
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 py-2 text-xs font-medium text-stone-500 hover:border-stone-400 hover:text-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {snapState === "loading" ? (
+              <>
+                <svg className="h-3 w-3 animate-spin" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M6 1v2M6 9v2M1 6h2M9 6h2" strokeLinecap="round"/>
+                </svg>
+                Snapping…
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 10 C3 7 5 6 6 6 C7 6 9 5 10 2"/><circle cx="6" cy="6" r="1" fill="currentColor" stroke="none"/>
+                </svg>
+                {snapState === "done" ? "Snapped to roads ✓" : "Snap to roads"}
+              </>
+            )}
+          </button>
+          {snapState === "error" && snapError && (
+            <p className="mt-1.5 text-xs text-red-500 leading-snug">{snapError}</p>
+          )}
+        </div>
+      )}
 
       {isCustomLine && onDeleteLine && (
         <div className="mx-5 mt-4">
@@ -113,7 +153,7 @@ export function RoutePanel({
           {allStops.map((stop, i) => {
             const isExtra = extraNames.has(stop.name);
             return (
-              <li key={stop.name} className="group mb-0 flex items-center justify-between">
+              <li key={`${i}-${stop.name}`} className="group mb-0 flex items-center justify-between">
                 <div className="flex items-center min-w-0">
                   <span
                     className="absolute -left-[5px] h-2.5 w-2.5 rounded-full border-2 bg-white"

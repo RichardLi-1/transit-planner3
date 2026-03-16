@@ -59,6 +59,10 @@ export function TransitMap() {
   const [importError, setImportError] = useState<string | null>(null);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [exportProgress, setExportProgress] = useState<number | null>(null);
+  const [showExportReminder, setShowExportReminder] = useState(false);
+  const exportReminderShownRef = useRef(false);
+  const [showIEDropdown, setShowIEDropdown] = useState(false);
+  const ieDropdownRef = useRef<HTMLDivElement>(null);
   const [validationResult, setValidationResult] = useState<{
     result: import("~/lib/gtfs-validate").ValidationResult;
     context: "export" | "import";
@@ -96,11 +100,15 @@ export function TransitMap() {
   const [canRedo, setCanRedo] = useState(false);
 
   // ── Lines panel: collapsible sections + per-route visibility + timetable expand
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ bus: true });
   const [hiddenRoutes, setHiddenRoutes] = useState<Set<string>>(
     new Set(BUS_ROUTES.map((r) => r.id)),
   );
 
+
+  // Tracks the previous hiddenRoutes snapshot so the visibility effect only
+  // calls setLayoutProperty for routes whose state actually changed.
+  const prevHiddenRef = useRef<Set<string>>(new Set(BUS_ROUTES.map((r) => r.id)));
 
   // Refs for use inside map event callbacks (avoid stale closure)
   const drawModeRef = useRef<DrawMode>("normal");
@@ -109,6 +117,12 @@ export function TransitMap() {
   const addStationToLineRef = useRef<string | null>(null);
   const customLinesRef = useRef<Route[]>([]);
   const routeExtraStopsRef = useRef<Map<string, { name: string; coords: [number, number] }[]>>(new Map());
+  // Precomputed stop-dot layer IDs for click-hit-testing — avoids scanning
+  // getStyle().layers (1000+ entries) on every map click. Updated when custom
+  // lines are added/removed.
+  const stopDotLayerIdsRef = useRef<string[]>(
+    ["bus-stops-dot", ...ROUTES.map((r) => `stops-dot-${r.id}`)],
+  );
   // Blocks neighbourhood clicks for one tick after a polygon is completed,
   // preventing the closing double-click from immediately selecting a neighbourhood.
   const justCompletedBoundaryRef = useRef(false);
@@ -165,6 +179,11 @@ export function TransitMap() {
 
   useEffect(() => {
     customLinesRef.current = customLines;
+    stopDotLayerIdsRef.current = [
+      "bus-stops-dot",
+      ...ROUTES.map((r) => `stops-dot-${r.id}`),
+      ...customLines.map((r) => `stops-dot-${r.id}`),
+    ];
   }, [customLines]);
 
   useEffect(() => {
@@ -174,6 +193,37 @@ export function TransitMap() {
   useEffect(() => {
     stationPopupRef.current = stationPopup;
   }, [stationPopup]);
+
+  // ── Unsaved-changes guard ─────────────────────────────────────────────────
+  const hasUnsaved = customLines.length > 0 || routeExtraStops.size > 0;
+
+  // Native browser dialog on tab close / refresh
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsaved]);
+
+  // One-time export reminder modal — fires when the user first creates a custom line
+  // (not on stop edits, which happen during active editing)
+  useEffect(() => {
+    if (customLines.length === 0 || exportReminderShownRef.current) return;
+    exportReminderShownRef.current = true;
+    setShowExportReminder(true);
+  }, [customLines.length]);
+
+  // Close the I/E dropdown when clicking outside it
+  useEffect(() => {
+    if (!showIEDropdown) return;
+    function onOutsideClick(e: MouseEvent) {
+      if (ieDropdownRef.current && !ieDropdownRef.current.contains(e.target as Node)) {
+        setShowIEDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, [showIEDropdown]);
 
   async function handleGenerateRoute() {
     if (isGenerating) return;
@@ -458,6 +508,15 @@ export function TransitMap() {
     selectedStationsRef.current = new Set();
     setDrawMode("normal");
     drawModeRef.current = "normal";
+  }
+
+  async function handleSnapToRoads(route: Route, stops: { name: string; coords: [number, number] }[]) {
+    const { snapToRoads } = await import("~/lib/road-snap");
+    const effectiveStops = stops.length > 0 ? stops : route.stops;
+    const shape = await snapToRoads(effectiveStops, TOKEN);
+    setCustomLines((prev) =>
+      prev.map((r) => r.id === route.id ? { ...r, shape } : r),
+    );
   }
 
   function handleDeleteCustomLine(routeId: string) {
@@ -760,8 +819,7 @@ export function TransitMap() {
         if (justCompletedBoundaryRef.current) return;
         if (councilHasRunRef.current) return; // locked after Generate Route
         // Station dots sit on top of neighbourhoods — let the station handler take priority
-        const stopLayers = (map.getStyle()?.layers ?? []).filter((l) => l.id.startsWith("stops-dot-")).map((l) => l.id);
-        if (stopLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: stopLayers }).length > 0) return;
+        if (map.queryRenderedFeatures(e.point, { layers: stopDotLayerIdsRef.current }).length > 0) return;
         const id = e.features?.[0]?.properties?.AREA_SHORT_CODE as string | undefined;
         if (!id) return;
         const name = e.features?.[0]?.properties?.AREA_NAME as string | undefined;
@@ -924,15 +982,146 @@ export function TransitMap() {
         firstLabelLayer,
       );
 
-      // Route lines + stops — buses first, then streetcars, then subways/LRTs on top
+      // ── Shared bus layers (2 GeoJSON sources, 4 layers — replaces per-route bus layers)
+      const visibleBusRouteIds = new Set(
+        BUS_ROUTES.filter((r) => !hiddenRoutes.has(r.id)).map((r) => r.id),
+      );
+      const busLinesFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = BUS_ROUTES.map((r) => ({
+        type: "Feature" as const,
+        properties: { routeId: r.id, color: r.color },
+        geometry: {
+          type: "LineString" as const,
+          coordinates: (r.shape ?? r.stops.map((s) => s.coords)),
+        },
+      }));
+      const busStopsFeatures: GeoJSON.Feature<GeoJSON.Point>[] = BUS_ROUTES.flatMap((r) =>
+        r.stops.map((s) => ({
+          type: "Feature" as const,
+          properties: { routeId: r.id, color: r.color, name: s.name },
+          geometry: { type: "Point" as const, coordinates: s.coords },
+        })),
+      );
+      const hiddenBusIds = BUS_ROUTES.map((r) => r.id).filter((id) => !visibleBusRouteIds.has(id));
+      const busFilter: mapboxgl.FilterSpecification =
+        hiddenBusIds.length > 0
+          ? ["!", ["in", ["get", "routeId"], ["literal", hiddenBusIds]]]
+          : ["literal", true];
+
+      map.addSource("bus-lines-source", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: busLinesFeatures },
+      });
+      map.addSource("bus-stops-source", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: busStopsFeatures },
+      });
+
+      map.addLayer({
+        id: "bus-line-shadow",
+        type: "line",
+        source: "bus-lines-source",
+        filter: busFilter,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "color"] as unknown as string,
+          "line-opacity": 0.08,
+          "line-width": 5,
+          "line-blur": 3,
+        },
+      });
+
+      map.addLayer({
+        id: "bus-line-layer",
+        type: "line",
+        source: "bus-lines-source",
+        filter: busFilter,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "color"] as unknown as string,
+          "line-opacity": 0.7,
+          "line-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: "bus-stops-ring",
+        type: "circle",
+        source: "bus-stops-source",
+        filter: busFilter,
+        minzoom: 14,
+        paint: {
+          "circle-color": ["get", "color"] as unknown as string,
+          "circle-opacity": 0.5,
+          "circle-radius": 2.5,
+        },
+      });
+
+      map.addLayer({
+        id: "bus-stops-dot",
+        type: "circle",
+        source: "bus-stops-source",
+        filter: busFilter,
+        minzoom: 14,
+        paint: {
+          "circle-color": "#ffffff",
+          "circle-stroke-color": ["get", "color"] as unknown as string,
+          "circle-radius": 1.5,
+          "circle-stroke-width": 1,
+        },
+      });
+
+      // Click handler on shared bus stop dot layer
+      map.on("click", "bus-stops-dot", (e) => {
+        if (didDragStopRef.current) { didDragStopRef.current = false; return; }
+        const props = e.features?.[0]?.properties as { name?: string; routeId?: string } | undefined;
+        const name = props?.name;
+        const routeId = props?.routeId;
+        if (!name || !routeId) return;
+        if (!addStationToLineRef.current) e.originalEvent.stopPropagation();
+        if (drawModeRef.current === "select") {
+          const key = `${name}::${routeId}`;
+          const next = new Set(selectedStationsRef.current);
+          if (next.has(key)) next.delete(key); else next.add(key);
+          selectedStationsRef.current = next;
+          setSelectedStations(new Set(next));
+          return;
+        }
+        const busRoute = BUS_ROUTES.find((r) => r.id === routeId);
+        if (!busRoute) return;
+        const { x, y } = e.point;
+        setStationPopup({ name, routeId, x, y, coords: [e.lngLat.lng, e.lngLat.lat] });
+        setSelectedRoute(busRoute);
+        setSelectedStop(name);
+      });
+
+      map.on("mouseenter", "bus-stops-dot", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "bus-stops-dot", () => { map.getCanvas().style.cursor = ""; });
+
+      map.on("click", "bus-line-layer", (e) => {
+        const routeId = e.features?.[0]?.properties?.routeId as string | undefined;
+        const busRoute = BUS_ROUTES.find((r) => r.id === routeId);
+        if (busRoute) { setSelectedRoute(busRoute); setSelectedStop(null); }
+      });
+
+      map.on("mouseenter", "bus-line-layer", () => {
+        map.getCanvas().style.cursor = "pointer";
+        map.setPaintProperty("bus-line-layer", "line-width", 4);
+        setHoveredId("bus");
+      });
+
+      map.on("mouseleave", "bus-line-layer", () => {
+        map.getCanvas().style.cursor = "";
+        map.setPaintProperty("bus-line-layer", "line-width", 2);
+        setHoveredId(null);
+      });
+
+      // Route lines + stops — streetcars first, then subways/LRTs on top (buses handled above)
       const routesByZOrder = [
-        ...BUS_ROUTES,
         ...ROUTES.filter((r) => r.type === "streetcar"),
         ...ROUTES.filter((r) => r.type !== "bus" && r.type !== "streetcar"),
       ];
       routesByZOrder.forEach((route) => {
         const sc = route.type === "streetcar";
-        const bus = route.type === "bus";
         map.addSource(`route-${route.id}`, {
           type: "geojson",
           data: routeToGeoJSON(route),
@@ -950,9 +1139,9 @@ export function TransitMap() {
           layout: { "line-join": "round", "line-cap": "round" },
           paint: {
             "line-color": route.color,
-            "line-width": bus ? 2 : sc ? 5 : 10,
-            "line-opacity": bus ? 0.05 : sc ? 0.08 : 0.12,
-            "line-blur": bus ? 2 : sc ? 3 : 4,
+            "line-width": sc ? 5 : 10,
+            "line-opacity": sc ? 0.08 : 0.12,
+            "line-blur": sc ? 3 : 4,
           },
         });
 
@@ -961,7 +1150,7 @@ export function TransitMap() {
           type: "line",
           source: `route-${route.id}`,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": route.color === "#FFCD00" ? "#E3A007" : route.color === "#00A650" ? "#005C2E" : route.color === "#B100CD" ? "#5B006B" : "#ffffff", "line-width": bus ? 2 : sc ? 5 : 11, "line-opacity": bus ? 0.5 : sc ? 0.7 : 0.9 },
+          paint: { "line-color": route.color === "#FFCD00" ? "#E3A007" : route.color === "#00A650" ? "#005C2E" : route.color === "#B100CD" ? "#5B006B" : "#ffffff", "line-width": sc ? 5 : 11, "line-opacity": sc ? 0.7 : 0.9 },
         });
 
         map.addLayer({
@@ -969,16 +1158,16 @@ export function TransitMap() {
           type: "line",
           source: `route-${route.id}`,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": route.color, "line-width": bus ? 1.5 : sc ? 3 : 7, "line-opacity": bus ? 0.7 : sc ? 0.85 : 1 },
+          paint: { "line-color": route.color, "line-width": sc ? 3 : 7, "line-opacity": sc ? 0.85 : 1 },
         });
 
         map.addLayer({
           id: `stops-ring-${route.id}`,
           type: "circle",
           source: `stops-${route.id}`,
-          minzoom: bus ? 15 : sc ? 13 : 11,
+          minzoom: sc ? 13 : 11,
           paint: {
-            "circle-radius": bus ? 2 : sc ? 3.5 : 6,
+            "circle-radius": sc ? 3.5 : 6,
             "circle-color": route.color,
             "circle-opacity": 0.25,
             "circle-stroke-width": 0,
@@ -992,10 +1181,10 @@ export function TransitMap() {
           minzoom: 11,
           filter: ["==", ["get", "name"], "__none__"],
           paint: {
-            "circle-radius": bus ? 3.5 : sc ? 5 : 9,
+            "circle-radius": sc ? 5 : 9,
             "circle-color": route.color,
             "circle-opacity": 0.5,
-            "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2,
+            "circle-stroke-width": sc ? 1.5 : 2,
             "circle-stroke-color": "#ffffff",
           },
         });
@@ -1004,12 +1193,12 @@ export function TransitMap() {
           id: `stops-dot-${route.id}`,
           type: "circle",
           source: `stops-${route.id}`,
-          minzoom: bus ? 15 : sc ? 13 : 11,
+          minzoom: sc ? 13 : 11,
           paint: {
-            "circle-radius": bus ? 1.5 : sc ? 2 : 3.5,
+            "circle-radius": sc ? 2 : 3.5,
             "circle-color": "#ffffff",
             "circle-stroke-color": route.color,
-            "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2,
+            "circle-stroke-width": sc ? 1.5 : 2,
           },
         });
 
@@ -1017,13 +1206,13 @@ export function TransitMap() {
 
         map.on("mouseenter", `route-line-${route.id}`, () => {
           map.getCanvas().style.cursor = "pointer";
-          map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 3 : sc ? 5 : 10);
+          map.setPaintProperty(`route-line-${route.id}`, "line-width", sc ? 5 : 10);
           setHoveredId(route.id);
         });
 
         map.on("mouseleave", `route-line-${route.id}`, () => {
           map.getCanvas().style.cursor = "";
-          map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 1.5 : sc ? 3 : 7);
+          map.setPaintProperty(`route-line-${route.id}`, "line-width", sc ? 3 : 7);
           setHoveredId(null);
         });
 
@@ -1242,12 +1431,33 @@ export function TransitMap() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
-    for (const route of [...ROUTES, ...BUS_ROUTES]) {
-      const vis = hiddenRoutes.has(route.id) ? "none" : "visible";
+    const prev = prevHiddenRef.current;
+
+    // Bus routes: use a single setFilter on the shared bus layers
+    const busChanged = BUS_ROUTES.some((r) => prev.has(r.id) !== hiddenRoutes.has(r.id));
+    if (busChanged) {
+      const hiddenBusIds = BUS_ROUTES.map((r) => r.id).filter((id) => hiddenRoutes.has(id));
+      const busFilter: mapboxgl.FilterSpecification =
+        hiddenBusIds.length > 0
+          ? ["!", ["in", ["get", "routeId"], ["literal", hiddenBusIds]]]
+          : ["literal", true];
+      for (const layerId of ["bus-line-shadow", "bus-line-layer", "bus-stops-ring", "bus-stops-dot"]) {
+        if (map.getLayer(layerId)) map.setFilter(layerId, busFilter);
+      }
+    }
+
+    // Non-bus routes: use setLayoutProperty per route as before
+    for (const route of ROUTES) {
+      const wasHidden = prev.has(route.id);
+      const isHidden  = hiddenRoutes.has(route.id);
+      if (wasHidden === isHidden) continue;
+      const vis = isHidden ? "none" : "visible";
       for (const layerId of [`route-shadow-${route.id}`, `route-outline-${route.id}`, `route-line-${route.id}`, `stops-ring-${route.id}`, `stops-selected-${route.id}`, `stops-dot-${route.id}`]) {
         if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", vis);
       }
     }
+
+    prevHiddenRef.current = new Set(hiddenRoutes);
   }, [hiddenRoutes, mapLoaded]);
 
   // ── generated route layer (re-renders when route or stops change)
@@ -1892,7 +2102,12 @@ export function TransitMap() {
 	                              <button
 	                                title={isActive ? "Deselect line" : "Select to add stations"}
 	                                onClick={() => {
-	                                  if (!isActive) { handleSetDrawMode("normal"); snapshotHistory(); }
+	                                  if (!isActive) {
+	                                    handleSetDrawMode("normal");
+	                                    snapshotHistory();
+	                                    // Auto-show the route if it's hidden
+	                                    if (isHidden) setHiddenRoutes((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+	                                  }
 	                                  setAddStationToLine(isActive ? null : r.id);
 	                                }}
 	                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all ${isActive ? "ring-2 ring-offset-1" : isHidden ? "opacity-30" : "opacity-60 hover:opacity-100"}`}
@@ -2180,6 +2395,9 @@ export function TransitMap() {
             isCustomLine={customLines.some((r) => r.id === selectedRoute.id)}
             onDeleteStop={(name) => handleDeleteStop(name, selectedRoute.id)}
             onDeleteLine={() => handleDeleteCustomLine(selectedRoute.id)}
+            onSnapToRoads={customLines.some((r) => r.id === selectedRoute.id)
+              ? () => handleSnapToRoads(selectedRoute, routeExtraStops.get(selectedRoute.id) ?? [])
+              : undefined}
             onClose={() => { setSelectedRoute(null); setSelectedStop(null); }}
           />
         ) : showGeneratedPanel ? (
@@ -2394,17 +2612,19 @@ export function TransitMap() {
       />
 
       {/* Import / Export — top right */}
-      <div className="pointer-events-none absolute top-5 right-6 flex items-center gap-2 z-10">
+      <div className="pointer-events-none absolute top-5 right-6 z-10 flex items-start gap-2">
+
+        {/* ── Wide screens: two full-width buttons ── */}
         <button
           onClick={handleImport}
-          className="pointer-events-auto flex h-13 items-center gap-2 rounded-xl border border-[#D7D7D7] bg-white px-4 text-base font-normal text-stone-500 shadow-sm hover:text-stone-800 transition-colors"
+          className="pointer-events-auto hidden lg:flex h-13 items-center gap-2 rounded-xl border border-[#D7D7D7] bg-white px-4 text-base font-normal text-stone-500 shadow-sm hover:text-stone-800 transition-colors"
         >
           <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="3" rx="1" fill="none"/>
           </svg>
           Import
         </button>
-        <div className="pointer-events-auto flex flex-col gap-1.5">
+        <div className="pointer-events-auto hidden lg:flex flex-col gap-1.5">
           <button
             onClick={handleExport}
             disabled={exportProgress !== null}
@@ -2414,6 +2634,9 @@ export function TransitMap() {
               <path d="M8 10V2M5 5l3-3 3 3"/><rect x="2" y="11" width="12" height="3" rx="1" fill="none"/>
             </svg>
             Export GTFS
+            {hasUnsaved && (
+              <span className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="Unsaved changes" />
+            )}
           </button>
           {exportProgress !== null && (
             <div className="h-1 w-full overflow-hidden rounded-full bg-stone-200">
@@ -2424,7 +2647,96 @@ export function TransitMap() {
             </div>
           )}
         </div>
+
+        {/* ── Narrow screens: single icon button → dropdown ── */}
+        <div ref={ieDropdownRef} className="pointer-events-auto relative lg:hidden">
+          <button
+            onClick={() => setShowIEDropdown((v) => !v)}
+            className="flex h-13 w-13 items-center justify-center rounded-xl border border-[#D7D7D7] bg-white text-stone-500 shadow-sm hover:text-stone-800 transition-colors"
+            aria-label="Import / Export"
+          >
+            {/* Upload/download stacked arrows */}
+            <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 6l3-3 3 3M11 10l-3 3-3-3"/>
+            </svg>
+            {hasUnsaved && (
+              <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-amber-400" />
+            )}
+          </button>
+
+          {showIEDropdown && (
+            <div className="absolute right-0 top-full mt-1.5 w-44 overflow-hidden rounded-xl border border-[#D7D7D7] bg-white shadow-lg">
+              <button
+                onClick={() => { setShowIEDropdown(false); handleImport(); }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-colors"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v8M5 7l3 3 3-3"/><rect x="2" y="11" width="12" height="3" rx="1" fill="none"/>
+                </svg>
+                Import
+              </button>
+              <div className="mx-3 h-px bg-stone-100" />
+              <button
+                onClick={() => { setShowIEDropdown(false); handleExport(); }}
+                disabled={exportProgress !== null}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 10V2M5 5l3-3 3 3"/><rect x="2" y="11" width="12" height="3" rx="1" fill="none"/>
+                </svg>
+                Export GTFS
+                {hasUnsaved && (
+                  <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                )}
+              </button>
+              {exportProgress !== null && (
+                <div className="mx-3 mb-2 h-1 overflow-hidden rounded-full bg-stone-200">
+                  <div
+                    className="h-full rounded-full bg-stone-700 transition-all duration-150"
+                    style={{ width: `${exportProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
+
+      {/* Export reminder modal — shown once on first unsaved change */}
+      {showExportReminder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-6 w-full max-w-md rounded-2xl border border-[#D7D7D7] bg-white p-8 shadow-2xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-amber-600" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v5M8 10v.5" strokeWidth="2"/><circle cx="8" cy="8" r="6.5"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-stone-800">Export before you leave</p>
+                <p className="mt-1 text-sm leading-relaxed text-stone-500">
+                  Your custom lines and stop edits only exist in this browser tab. Export as GTFS to save your work — closing or refreshing the page will lose all changes.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowExportReminder(false)}
+                className="rounded-xl border border-[#D7D7D7] px-5 py-2 text-sm font-medium text-stone-600 hover:text-stone-800 transition-colors"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => { setShowExportReminder(false); handleExport(); }}
+                className="rounded-xl bg-stone-800 px-5 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors"
+              >
+                Export now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import confirmation modal */}
       {pendingImportFile && (
