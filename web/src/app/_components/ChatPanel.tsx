@@ -733,6 +733,7 @@ export function ChatPanel({
         <div>
           <p className="text-sm font-semibold text-stone-800">Transit Council</p>
           <p className="text-xs text-stone-400">{streaming ? "Deliberation in progress…" : "Deliberation complete"}</p>
+          <p className="text-[10px] text-amber-500 font-medium mt-0.5">Experimental feature</p>
         </div>
         <div className="flex items-center gap-2">
           {sessions.length > 0 && (

@@ -1632,10 +1632,10 @@ export function TransitMap() {
 	      map.addLayer({ id: `route-shadow-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": bus ? 2 : sc ? 5 : 10, "line-opacity": bus ? 0.05 : sc ? 0.08 : 0.12, "line-blur": bus ? 2 : sc ? 3 : 4 } });
 	      map.addLayer({ id: `route-outline-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#ffffff", "line-width": bus ? 2 : sc ? 5 : 11, "line-opacity": bus ? 0.5 : sc ? 0.7 : 0.9 } });
 	      map.addLayer({ id: `route-line-${route.id}`, type: "line", source: `route-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": route.color, "line-width": bus ? 1.5 : sc ? 3 : 7, "line-opacity": bus ? 0.7 : sc ? 0.85 : 1 } });
-	      map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: bus ? 13 : sc ? 12 : 11, paint: { "circle-radius": bus ? 2 : sc ? 3.5 : 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
+	      map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 2 : sc ? 3.5 : 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
 	      map.addLayer({ id: `stops-selected-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 9, filter: ["==", ["get", "name"], "__none__"], paint: { "circle-radius": bus ? 3.5 : sc ? 5 : 9, "circle-color": route.color, "circle-opacity": 0.5, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2, "circle-stroke-color": "#ffffff" } });
-	      map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: bus ? 13 : sc ? 12 : 11, paint: { "circle-radius": bus ? 1.5 : sc ? 2 : 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2 } });
-	      map.on("click", `route-line-${route.id}`, () => { setSelectedRoute(route); setSelectedStop(null); });
+	      map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 1.5 : sc ? 2 : 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2 } });
+	      map.on("click", `route-line-${route.id}`, () => { const cur = routesRef.current.find(r => r.id === route.id) ?? route; setSelectedRoute(cur); setSelectedStop(null); });
 	      map.on("mouseenter", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 3 : sc ? 5 : 10); });
 	      map.on("mouseleave", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = ""; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 1.5 : sc ? 3 : 7); });
 	      map.on("click", `stops-dot-${route.id}`, (e) => {
@@ -1652,7 +1652,7 @@ export function TransitMap() {
           return;
         }
         setStationPopup({ name, routeId: route.id, x: e.point.x, y: e.point.y, coords: [e.lngLat.lng, e.lngLat.lat] });
-        setSelectedRoute(route);
+        setSelectedRoute(routesRef.current.find(r => r.id === route.id) ?? route);
         setSelectedStop(name);
       });
       map.on("mouseenter", `stops-dot-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; });
@@ -2235,7 +2235,7 @@ export function TransitMap() {
         className={`pointer-events-none absolute right-6 bottom-6 flex items-stretch transition-all duration-300 ease-in-out ${
           selectedRoute || showGeneratedPanel ? "translate-x-0" : "translate-x-[calc(100%+2.25rem)]"
         }`}
-        style={{ top: "72px" }}
+        style={{ top: "80px" }}
       >
         {selectedRoute ? (
           <RoutePanel
@@ -2304,7 +2304,11 @@ export function TransitMap() {
 
       {/* Generate Route / View Council — bottom centre */}
       {(hasSelection || councilHasRun) && (
-        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex justify-center gap-3">
+        <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex flex-col items-center gap-2">
+          {hasSelection && !councilOpen && (
+            <p className="text-[11px] text-stone-500 bg-white/80 rounded-full px-3 py-0.5 shadow-sm">Experimental feature</p>
+          )}
+          <div className="flex gap-3">
           {hasSelection && !councilOpen && (
             <button
               onClick={handleGenerate}
@@ -2325,6 +2329,7 @@ export function TransitMap() {
               View Council
             </button>
           )}
+          </div>
         </div>
       )}
 
