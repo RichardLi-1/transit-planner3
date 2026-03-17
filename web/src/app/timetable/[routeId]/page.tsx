@@ -41,7 +41,7 @@ export default function TimetablePage({
   }
 
   const { route, extraStops } = stored;
-  const stops = extraStops.length > 0 ? extraStops : route.stops;
+  const stops = extraStops?.length > 0 ? extraStops : route.stops;
   const tt = computeTimetable(route, stops);
 
   // Group trip indices by departure hour
@@ -57,9 +57,6 @@ export default function TimetablePage({
   // Default to first hour on load
   const activeHour = selectedHour ?? hours[0] ?? 0;
   const tripIndices = hourMap.get(activeHour) ?? [];
-
-  // Format hour label (handles post-midnight service shown as e.g. "01")
-  const fmtHourLabel = (h: number) => String(h).padStart(2, "0") + ":xx";
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans">
@@ -78,7 +75,7 @@ export default function TimetablePage({
           </p>
         </div>
         <a
-          href="/"
+          href="/map"
           className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-500 hover:text-stone-800 hover:border-stone-400 transition-colors"
         >
           ← Back to map
@@ -174,7 +171,7 @@ export default function TimetablePage({
         )}
 
         <p className="mt-4 text-xs text-stone-400">
-          Travel times estimated from haversine distance at average speed for route type. {fmtHourLabel} columns show all departures in that hour.
+          Travel times estimated from haversine distance at average speed for route type. HH:xx columns show all departures in that hour.
         </p>
       </div>
     </div>

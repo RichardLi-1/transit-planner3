@@ -141,6 +141,8 @@ export function TransitMap() {
   const [focusedNeighbourhood, setFocusedNeighbourhood] = useState<{ id: string; name: string; lat: number; lng: number; geometry: GeoJSON.Geometry | null } | null>(null);
   const [stationPopup, setStationPopup] = useState<{ name: string; routeId: string; x: number; y: number; coords: [number, number] } | null>(null);
   const [showNewLineModal, setShowNewLineModal] = useState(false);
+  const [snapProgress, setSnapProgress] = useState<{ routeId: string; pct: number } | null>(null);
+  const snapDebounceRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const stopCounterRef = useRef(1);
   const customLineCounterRef = useRef(1);
   const historyRef = useRef<{ routes: Route[]; counter: number }[]>([]);
@@ -164,6 +166,7 @@ export function TransitMap() {
   const selectedNeighbourhoodsRef = useRef<Set<string>>(new Set());
   const selectedStationsRef = useRef<Set<string>>(new Set());
   const addStationToLineRef = useRef<string | null>(null);
+  const triggerAutoSnapRef = useRef<(routeId: string) => void>(() => {});
   const routesRef = useRef<Route[]>([]);
   // Precomputed stop-dot layer IDs for click-hit-testing — avoids scanning
   // getStyle().layers (1000+ entries) on every map click. Updated when custom
@@ -562,6 +565,46 @@ export function TransitMap() {
       prev.map((r) => r.id === route.id ? { ...r, shape } : r),
     );
   }
+
+  function triggerAutoSnap(routeId: string) {
+    const existing = snapDebounceRef.current.get(routeId);
+    if (existing !== undefined) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      snapDebounceRef.current.delete(routeId);
+      const route = routesRef.current.find((r) => r.id === routeId);
+      if (!route || route.type !== "bus" || route.stops.length < 2) return;
+      // Snapshot the stop positions at snap-start time; discard result if stops changed
+      const stopsKey = route.stops.map((s) => s.coords.join(",")).join("|");
+      setSnapProgress({ routeId, pct: 5 });
+      const progressTimer = setTimeout(
+        () => setSnapProgress((p) => p?.routeId === routeId ? { routeId, pct: 75 } : p),
+        150,
+      );
+      void (async () => {
+        try {
+          const { snapToRoads } = await import("~/lib/road-snap");
+          const shape = await snapToRoads(route.stops, TOKEN, (pct) => {
+            if (pct === 100) return; // handled below
+            setSnapProgress((p) => p?.routeId === routeId ? { routeId, pct: Math.max(pct, 5) } : p);
+          });
+          clearTimeout(progressTimer);
+          // Check against routesRef (current stops) before applying — discard stale snaps
+          const currentKey = routesRef.current.find((r) => r.id === routeId)?.stops.map((s) => s.coords.join(",")).join("|");
+          const isStale = currentKey !== stopsKey;
+          if (!isStale) {
+            setSnapProgress({ routeId, pct: 100 });
+            setRoutes((prev) => prev.map((r) => r.id === routeId ? { ...r, shape } : r));
+            setTimeout(() => setSnapProgress((p) => p?.routeId === routeId ? null : p), 600);
+          }
+        } catch {
+          clearTimeout(progressTimer);
+          setSnapProgress((p) => p?.routeId === routeId ? null : p);
+        }
+      })();
+    }, 500);
+    snapDebounceRef.current.set(routeId, timer);
+  }
+  triggerAutoSnapRef.current = triggerAutoSnap;
 
   function handleDeleteCustomLine(routeId: string) {
     snapshotHistory();
@@ -1194,6 +1237,11 @@ export function TransitMap() {
             const newStops = [...r.stops.slice(0, insertIdx), newStop, ...r.stops.slice(insertIdx)];
             return { ...r, shape: undefined, stops: newStops };
           }));
+          // Auto-snap bus routes to roads after each stop placement
+          const routeBeforeAdd = routesRef.current.find((r) => r.id === lineId);
+          if (routeBeforeAdd?.type === "bus" && routeBeforeAdd.stops.length >= 1) {
+            triggerAutoSnapRef.current(lineId);
+          }
           // Geocode asynchronously and rename from temp name
           void reverseGeocodeStation(coords[0], coords[1]).then((geoName) => {
             if (!geoName) return;
@@ -1343,16 +1391,14 @@ export function TransitMap() {
     const prev = prevHiddenRef.current;
 
     // Bus routes: use a single setFilter on the shared bus layers
-    const busChanged = BUS_ROUTES.some((r) => prev.has(r.id) !== hiddenRoutes.has(r.id));
-    if (busChanged) {
-      const hiddenBusIds = BUS_ROUTES.map((r) => r.id).filter((id) => hiddenRoutes.has(id));
-      const busFilter: mapboxgl.FilterSpecification =
-        hiddenBusIds.length > 0
-          ? ["!", ["in", ["get", "routeId"], ["literal", hiddenBusIds]]]
-          : ["literal", true];
-      for (const layerId of ["bus-line-shadow", "bus-line-layer", "bus-stops-ring", "bus-stops-dot"]) {
-        if (map.getLayer(layerId)) map.setFilter(layerId, busFilter);
-      }
+    // Exclude both hidden routes AND routes that have been promoted to the editable routes state
+    const excludedBusIds = BUS_ROUTES.map((r) => r.id).filter((id) => hiddenRoutes.has(id) || routesRef.current.some((r) => r.id === id));
+    const busFilter: mapboxgl.FilterSpecification =
+      excludedBusIds.length > 0
+        ? ["!", ["in", ["get", "routeId"], ["literal", excludedBusIds]]]
+        : ["literal", true];
+    for (const layerId of ["bus-line-shadow", "bus-line-layer", "bus-stops-ring", "bus-stops-dot"]) {
+      if (map.getLayer(layerId)) map.setFilter(layerId, busFilter);
     }
 
     // Non-bus routes: cover all routes in the unified model
@@ -1367,7 +1413,7 @@ export function TransitMap() {
     }
 
     prevHiddenRef.current = new Set(hiddenRoutes);
-  }, [hiddenRoutes, mapLoaded]);
+  }, [hiddenRoutes, routes, mapLoaded]);
 
   // ── generated route layer (re-renders when route or stops change)
   useEffect(() => {
@@ -1939,8 +1985,8 @@ export function TransitMap() {
 	              ]
 	            ).map(({ key, label, types }) => {
 	              const sectionRoutes = [
-	                ...BUS_ROUTES.filter((r) => types.includes(r.type)),
-	                ...routes.filter((r) => types.includes(r.type)),
+	                ...BUS_ROUTES.filter((r) => types.includes(r.type)).map((r) => routes.find((er) => er.id === r.id) ?? r),
+	                ...routes.filter((r) => types.includes(r.type) && !BUS_ROUTES.some((br) => br.id === r.id)),
 	              ];
 	              if (sectionRoutes.length === 0) return null;
 	              const allHidden = sectionRoutes.every((r) => hiddenRoutes.has(r.id));
@@ -1983,6 +2029,13 @@ export function TransitMap() {
 	                      {sectionRoutes.map((r) => {
 	                        const isActive = addStationToLine === r.id;
 	                        const isHidden = hiddenRoutes.has(r.id);
+	                        const inRoutesState = routes.some((route) => route.id === r.id);
+	                        const promoteIfNeeded = () => {
+	                          if (!inRoutesState) {
+	                            const busRoute = BUS_ROUTES.find((br) => br.id === r.id);
+	                            if (busRoute) setRoutes((prev) => [...prev, { ...busRoute }]);
+	                          }
+	                        };
 	                        return (
 	                          <li key={r.id} className="group">
 	                            <div className="flex items-center gap-2">
@@ -1994,6 +2047,7 @@ export function TransitMap() {
 	                                    snapshotHistory();
 	                                    // Auto-show the route if it's hidden
 	                                    if (isHidden) setHiddenRoutes((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+	                                    promoteIfNeeded();
 	                                  }
 	                                  setAddStationToLine(isActive ? null : r.id);
 	                                }}
@@ -2006,31 +2060,34 @@ export function TransitMap() {
 	                                className={`flex-1 truncate text-left text-sm transition-colors ${isActive ? "font-semibold text-stone-900" : isHidden ? "text-stone-300" : "text-stone-600 hover:text-stone-900"}`}
 	                                onClick={() => setSelectedRoute(r)}
 	                              >{r.name}</button>
-	                              <button
-	                                title={isActive ? "Stop editing" : "Edit line"}
-	                                onClick={() => {
-	                                  if (!isActive) {
-	                                    handleSetDrawMode("normal");
-	                                    snapshotHistory();
-	                                    if (isHidden) setHiddenRoutes((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
-	                                  }
-	                                  setAddStationToLine(isActive ? null : r.id);
-	                                }}
-	                                className={`p-0.5 transition-all ${isActive ? "opacity-100 text-stone-700" : "opacity-0 group-hover:opacity-100 text-stone-300 hover:text-stone-600"}`}
-	                              >
-	                                <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z"/></svg>
-	                              </button>
-	                              <button
-	                                title={isHidden ? "Show" : "Hide"}
-	                                onClick={() => setHiddenRoutes((prev) => { const next = new Set(prev); isHidden ? next.delete(r.id) : next.add(r.id); return next; })}
-	                                className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-300 hover:text-stone-600 transition-all"
-	                              >
-	                                {isHidden ? (
-	                                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 1l10 10M5 5.2A2 2 0 0 0 6.8 7M3.2 3.3C2.2 4 1.4 4.9 1 6c1 2 3 3.5 5 3.5a6 6 0 0 0 2.4-.5M4.5 1.7A6 6 0 0 1 6 1.5c2 0 4 1.5 5 3.5-.4.8-.9 1.4-1.5 2"/></svg>
-	                                ) : (
-	                                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 6c1-2 3-3.5 5-3.5S10 4 11 6c-1 2-3 3.5-5 3.5S2 8 1 6z"/><circle cx="6" cy="6" r="1.8"/></svg>
-	                                )}
-	                              </button>
+	                              <div className={`flex items-center overflow-hidden transition-[max-width] duration-150 ${isActive ? "max-w-16" : "max-w-0 group-hover:max-w-16"}`}>
+	                                <button
+	                                  title={isActive ? "Stop editing" : "Edit line"}
+	                                  onClick={() => {
+	                                    if (!isActive) {
+	                                      handleSetDrawMode("normal");
+	                                      snapshotHistory();
+	                                      if (isHidden) setHiddenRoutes((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+	                                      promoteIfNeeded();
+	                                    }
+	                                    setAddStationToLine(isActive ? null : r.id);
+	                                  }}
+	                                  className={`p-0.5 transition-opacity ${isActive ? "opacity-100 text-stone-700" : "opacity-0 group-hover:opacity-100 text-stone-300 hover:text-stone-600"}`}
+	                                >
+	                                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z"/></svg>
+	                                </button>
+	                                <button
+	                                  title={isHidden ? "Show" : "Hide"}
+	                                  onClick={() => setHiddenRoutes((prev) => { const next = new Set(prev); isHidden ? next.delete(r.id) : next.add(r.id); return next; })}
+	                                  className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-300 hover:text-stone-600 transition-opacity"
+	                                >
+	                                  {isHidden ? (
+	                                    <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 1l10 10M5 5.2A2 2 0 0 0 6.8 7M3.2 3.3C2.2 4 1.4 4.9 1 6c1 2 3 3.5 5 3.5a6 6 0 0 0 2.4-.5M4.5 1.7A6 6 0 0 1 6 1.5c2 0 4 1.5 5 3.5-.4.8-.9 1.4-1.5 2"/></svg>
+	                                  ) : (
+	                                    <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 6c1-2 3-3.5 5-3.5S10 4 11 6c-1 2-3 3.5-5 3.5S2 8 1 6z"/><circle cx="6" cy="6" r="1.8"/></svg>
+	                                  )}
+	                                </button>
+	                              </div>
 	                            </div>
 	                          </li>
 	                        );
@@ -2081,15 +2138,25 @@ export function TransitMap() {
       {/* Add-station notification — below top-center toolbar */}
       {addStationToLine && (
         <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-700 shadow-sm">
-            <span>Click map to add station</span>
-            <span className="h-4 w-px bg-indigo-200" />
-            <button
-              onClick={() => setAddStationToLine(null)}
-              className="font-semibold hover:text-indigo-900 transition-colors"
-            >
-              Done
-            </button>
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50 shadow-sm">
+            <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700">
+              <span>Click map to add station</span>
+              <span className="h-4 w-px bg-indigo-200" />
+              <button
+                onClick={() => setAddStationToLine(null)}
+                className="font-semibold hover:text-indigo-900 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+            {snapProgress?.routeId === addStationToLine && (
+              <div className="h-0.5 bg-indigo-100">
+                <div
+                  className="h-full bg-indigo-400 transition-[width] duration-500 ease-out"
+                  style={{ width: `${snapProgress.pct}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

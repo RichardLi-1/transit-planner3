@@ -65,23 +65,31 @@ async function matchChunk(coords: Coord[], token: string): Promise<Coord[]> {
 export async function snapToRoads(
   stops: { coords: Coord }[],
   token: string,
+  onProgress?: (pct: number) => void,
 ): Promise<Coord[]> {
   if (stops.length < 2) {
     throw new Error("Need at least 2 stops to snap to roads.");
   }
 
   const coords = stops.map((s) => s.coords);
+  onProgress?.(0);
 
   // Single request for short routes
   if (coords.length <= MAX_WAYPOINTS) {
-    return matchChunk(coords, token);
+    const result = await matchChunk(coords, token);
+    onProgress?.(100);
+    return result;
   }
 
   // Chunk with 1-stop overlap so consecutive segments connect
+  const totalChunks = Math.ceil((coords.length - 1) / (MAX_WAYPOINTS - 1));
+  let chunkIdx = 0;
   const result: Coord[] = [];
   for (let i = 0; i < coords.length; i += MAX_WAYPOINTS - 1) {
     const chunk     = coords.slice(i, i + MAX_WAYPOINTS);
     const snapped   = await matchChunk(chunk, token);
+    chunkIdx++;
+    onProgress?.(Math.round((chunkIdx / totalChunks) * 100));
     if (result.length === 0) {
       result.push(...snapped);
     } else {
