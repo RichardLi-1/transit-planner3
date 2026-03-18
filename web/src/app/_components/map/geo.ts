@@ -99,3 +99,80 @@ export function stopsToGeoJSON(route: Route): GeoJSON.FeatureCollection<GeoJSON.
     })),
   };
 }
+
+type Coord = [number, number];
+
+function closestSegment(p: Coord, a: Coord, b: Coord): { t: number; dist2: number } {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { t: 0, dist2: (p[0]-a[0])**2 + (p[1]-a[1])**2 };
+  const t = Math.max(0, Math.min(1, ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / len2));
+  return { t, dist2: (p[0]-(a[0]+t*dx))**2 + (p[1]-(a[1]+t*dy))**2 };
+}
+
+function linearPos(p: Coord, coords: Coord[]): number {
+  let bestPos = 0, bestDist2 = Infinity;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const { t, dist2 } = closestSegment(p, coords[i]!, coords[i+1]!);
+    if (dist2 < bestDist2) { bestDist2 = dist2; bestPos = i + t; }
+  }
+  return bestPos;
+}
+
+function lerp2(coords: Coord[], pos: number): Coord {
+  const i = Math.min(Math.floor(pos), coords.length - 2);
+  const t = pos - i, a = coords[i]!, b = coords[i+1]!;
+  return [a[0]+t*(b[0]-a[0]), a[1]+t*(b[1]-a[1])];
+}
+
+function sliceLine(coords: Coord[], pos0: number, pos1: number): Coord[] {
+  const seg: Coord[] = [lerp2(coords, pos0)];
+  const from = Math.floor(pos0) + 1;
+  const to = Math.min(Math.ceil(pos1), coords.length - 1);
+  for (let i = from; i < to; i++) seg.push(coords[i]!);
+  seg.push(lerp2(coords, pos1));
+  return seg;
+}
+
+/**
+ * Given portal coords and the full smoothed route coords, returns underground
+ * sub-segments. Portals alternate: first toggles underground ON, second OFF, etc.
+ */
+export function computeUndergroundSegments(portalCoords: Coord[], routeCoords: Coord[]): Coord[][] {
+  if (portalCoords.length === 0 || routeCoords.length < 2) return [];
+  const positions = portalCoords.map(p => linearPos(p, routeCoords)).sort((a, b) => a - b);
+  const result: Coord[][] = [];
+  for (let i = 0; i < positions.length; i += 2) {
+    const start = positions[i]!;
+    const end = i + 1 < positions.length ? positions[i+1]! : routeCoords.length - 1;
+    result.push(sliceLine(routeCoords, start, end));
+  }
+  return result;
+}
+
+/** Snap a coordinate to the nearest point on the route's smoothed shape */
+export function snapToShape(p: Coord, routeCoords: Coord[]): Coord {
+  return lerp2(routeCoords, linearPos(p, routeCoords));
+}
+
+export function portalsToGeoJSON(route: Route): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  return {
+    type: "FeatureCollection",
+    features: (route.portals ?? []).map((portal, i) => ({
+      type: "Feature",
+      properties: { routeId: route.id, index: i },
+      geometry: { type: "Point", coordinates: portal.coords },
+    })),
+  };
+}
+
+export function undergroundToGeoJSON(route: Route): GeoJSON.Feature<GeoJSON.MultiLineString> {
+  const shape = route.shape ?? route.stops.map(s => s.coords);
+  const smoothed = shape.length >= 2 ? (routeToGeoJSON(route).geometry.coordinates as Coord[]) : [];
+  const segments = computeUndergroundSegments((route.portals ?? []).map(p => p.coords), smoothed);
+  return {
+    type: "Feature",
+    properties: { id: route.id },
+    geometry: { type: "MultiLineString", coordinates: segments },
+  };
+}

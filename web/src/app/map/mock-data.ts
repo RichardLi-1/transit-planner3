@@ -24,6 +24,8 @@ export type Route = {
   stops: Stop[];
   /** Full line geometry including intermediate curve waypoints [lng, lat]. When present, used for rendering instead of deriving coords from stops. */
   shape?: [number, number][];
+  /** Portal markers that toggle underground rendering on/off along the route. */
+  portals?: Array<{ coords: [number, number] }>;
 };
 
 export type RouteStats = {

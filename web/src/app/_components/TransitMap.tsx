@@ -11,7 +11,7 @@ import {
   type GeneratedRoute,
   type Route,
 } from "~/app/map/mock-data";
-import { routeToGeoJSON, stopsToGeoJSON, geomBBox } from "./map/geo";
+import { routeToGeoJSON, stopsToGeoJSON, geomBBox, portalsToGeoJSON, undergroundToGeoJSON, snapToShape } from "./map/geo";
 import { NeighbourhoodPanel } from "./map/NeighbourhoodPanel";
 import { RoutePanel } from "./map/RoutePanel";
 import { GeneratedRoutePanel } from "./map/GeneratedRoutePanel";
@@ -106,6 +106,7 @@ export function TransitMap() {
 
   // ── line-editor state (declared before stationPopulations useMemo)
   const [addStationToLine, setAddStationToLine] = useState<string | null>(null);
+  const [addPortalToLine, setAddPortalToLine] = useState<string | null>(null);
   const [routes, setRoutes] = useState<Route[]>(() => [
     ...ROUTES.filter((r) => r.type === "streetcar"),
     ...ROUTES.filter((r) => r.type !== "bus" && r.type !== "streetcar"),
@@ -143,6 +144,8 @@ export function TransitMap() {
   const [showNewLineModal, setShowNewLineModal] = useState(false);
   const [snapProgress, setSnapProgress] = useState<{ routeId: string; pct: number } | null>(null);
   const snapDebounceRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const shimmerAnimRef = useRef(new Map<string, number>());
+  const startShimmerRef = useRef<(routeId: string) => void>(() => {});
   const stopCounterRef = useRef(1);
   const customLineCounterRef = useRef(1);
   const historyRef = useRef<{ routes: Route[]; counter: number }[]>([]);
@@ -166,6 +169,7 @@ export function TransitMap() {
   const selectedNeighbourhoodsRef = useRef<Set<string>>(new Set());
   const selectedStationsRef = useRef<Set<string>>(new Set());
   const addStationToLineRef = useRef<string | null>(null);
+  const addPortalToLineRef = useRef<string | null>(null);
   const triggerAutoSnapRef = useRef<(routeId: string) => void>(() => {});
   const routesRef = useRef<Route[]>([]);
   // Precomputed stop-dot layer IDs for click-hit-testing — avoids scanning
@@ -227,6 +231,10 @@ export function TransitMap() {
   }, [addStationToLine]);
 
   useEffect(() => {
+    addPortalToLineRef.current = addPortalToLine;
+  }, [addPortalToLine]);
+
+  useEffect(() => {
     routesRef.current = routes;
     stopDotLayerIdsRef.current = [
       "bus-stops-dot",
@@ -242,6 +250,12 @@ export function TransitMap() {
             allStops.length >= 2 ? routeToGeoJSON(route) : { type: "FeatureCollection", features: [] }
           );
           (map.getSource(`stops-${route.id}`) as mapboxgl.GeoJSONSource).setData(stopsToGeoJSON({ ...route, stops: allStops }));
+          if (map.getSource(`portals-${route.id}`)) {
+            (map.getSource(`portals-${route.id}`) as mapboxgl.GeoJSONSource).setData(portalsToGeoJSON(route));
+          }
+          if (map.getSource(`underground-${route.id}`)) {
+            (map.getSource(`underground-${route.id}`) as mapboxgl.GeoJSONSource).setData(undergroundToGeoJSON(route));
+          }
         }
       }
     }
@@ -566,13 +580,43 @@ export function TransitMap() {
     );
   }
 
+  function startShimmer(routeId: string) {
+    const existing = shimmerAnimRef.current.get(routeId);
+    if (existing !== undefined) cancelAnimationFrame(existing);
+    const map = mapRef.current;
+    if (!map?.getLayer(`route-line-${routeId}`)) return;
+    const loop = (now: number) => {
+      const opacity = 0.2 + 0.5 * ((Math.sin((now / 700) * Math.PI * 2) + 1) / 2);
+      if (map.getLayer(`route-line-${routeId}`)) {
+        map.setPaintProperty(`route-line-${routeId}`, "line-opacity", opacity);
+      }
+      shimmerAnimRef.current.set(routeId, requestAnimationFrame(loop));
+    };
+    shimmerAnimRef.current.set(routeId, requestAnimationFrame(loop));
+  }
+
+  function stopShimmer(routeId: string) {
+    const raf = shimmerAnimRef.current.get(routeId);
+    if (raf !== undefined) { cancelAnimationFrame(raf); shimmerAnimRef.current.delete(routeId); }
+    const map = mapRef.current;
+    const route = routesRef.current.find((r) => r.id === routeId);
+    if (!map || !route || !map.getLayer(`route-line-${routeId}`)) return;
+    const bus = route.type === "bus", sc = route.type === "streetcar";
+    map.setPaintProperty(`route-line-${routeId}`, "line-opacity", bus ? 0.7 : sc ? 0.85 : 1);
+  }
+
+  startShimmerRef.current = startShimmer;
+
   function triggerAutoSnap(routeId: string) {
     const existing = snapDebounceRef.current.get(routeId);
     if (existing !== undefined) clearTimeout(existing);
     const timer = setTimeout(() => {
       snapDebounceRef.current.delete(routeId);
       const route = routesRef.current.find((r) => r.id === routeId);
-      if (!route || route.type !== "bus" || route.stops.length < 2) return;
+      if (!route || (route.type !== "bus" && route.type !== "streetcar") || route.stops.length < 2) {
+        stopShimmer(routeId);
+        return;
+      }
       // Snapshot the stop positions at snap-start time; discard result if stops changed
       const stopsKey = route.stops.map((s) => s.coords.join(",")).join("|");
       setSnapProgress({ routeId, pct: 5 });
@@ -593,12 +637,54 @@ export function TransitMap() {
           const isStale = currentKey !== stopsKey;
           if (!isStale) {
             setSnapProgress({ routeId, pct: 100 });
-            setRoutes((prev) => prev.map((r) => r.id === routeId ? { ...r, shape } : r));
-            setTimeout(() => setSnapProgress((p) => p?.routeId === routeId ? null : p), 600);
+            // isFirstSnap = route had no shape before → winding animation
+            // isFirstSnap = false → re-snap, old shape was visible → instant update
+            const isFirstSnap = !route.shape;
+            stopShimmer(routeId);
+            const map = mapRef.current;
+            const lineSrc = map?.getSource(`route-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+            if (isFirstSnap && lineSrc) {
+              const finalGeoJSON = routeToGeoJSON({ ...route, shape });
+              const allCoords = finalGeoJSON.geometry.coordinates as [number, number][];
+              const duration = Math.min(700, Math.max(300, allCoords.length * 2));
+              const startTime = performance.now();
+              const animateWind = (now: number) => {
+                const progress = Math.min((now - startTime) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 2);
+                const showCount = Math.max(2, Math.round(eased * allCoords.length));
+                lineSrc.setData({
+                  type: "Feature",
+                  properties: { id: routeId },
+                  geometry: { type: "LineString", coordinates: allCoords.slice(0, showCount) },
+                });
+                if (progress < 1) {
+                  requestAnimationFrame(animateWind);
+                } else {
+                  setRoutes((prev) => prev.map((r) => r.id === routeId ? { ...r, shape } : r));
+                  setTimeout(() => setSnapProgress((p) => p?.routeId === routeId ? null : p), 600);
+                }
+              };
+              requestAnimationFrame(animateWind);
+            } else {
+              // Re-snap: old shape was visible, just swap in the new one
+              setRoutes((prev) => prev.map((r) => r.id === routeId ? { ...r, shape } : r));
+              setTimeout(() => setSnapProgress((p) => p?.routeId === routeId ? null : p), 600);
+            }
           }
+          // stale: stopShimmer not called here — the pending new snap will handle it
         } catch {
           clearTimeout(progressTimer);
+          stopShimmer(routeId);
           setSnapProgress((p) => p?.routeId === routeId ? null : p);
+          // Snap failed — restore the fallback line directly so it doesn't stay blank
+          const map = mapRef.current;
+          const src = map?.getSource(`route-${routeId}`) as mapboxgl.GeoJSONSource | undefined;
+          if (src) {
+            const failedRoute = routesRef.current.find((r) => r.id === routeId);
+            src.setData(failedRoute && failedRoute.stops.length >= 2
+              ? routeToGeoJSON(failedRoute)
+              : { type: "FeatureCollection", features: [] });
+          }
         }
       })();
     }, 500);
@@ -610,15 +696,16 @@ export function TransitMap() {
     snapshotHistory();
     const map = mapRef.current;
     if (map) {
-      [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`].forEach((id) => {
+      [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
-      [`route-${routeId}`, `stops-${routeId}`].forEach((id) => {
+      [`route-${routeId}`, `stops-${routeId}`, `underground-${routeId}`, `portals-${routeId}`].forEach((id) => {
         if (map.getSource(id)) map.removeSource(id);
       });
     }
     setRoutes((prev) => prev.filter((r) => r.id !== routeId));
     if (addStationToLine === routeId) setAddStationToLine(null);
+    if (addPortalToLine === routeId) setAddPortalToLine(null);
     setSelectedRoute(null);
     setSelectedStop(null);
   }
@@ -1235,11 +1322,12 @@ export function TransitMap() {
             if (r.stops.length === 0) return { ...r, shape: undefined, stops: [newStop] };
             const insertIdx = bestInsertIndex(coords, r.stops);
             const newStops = [...r.stops.slice(0, insertIdx), newStop, ...r.stops.slice(insertIdx)];
-            return { ...r, shape: undefined, stops: newStops };
+            return { ...r, stops: newStops }; // keep existing shape visible during re-snap
           }));
-          // Auto-snap bus routes to roads after each stop placement
+          // Auto-snap bus and streetcar routes to roads after each stop placement
           const routeBeforeAdd = routesRef.current.find((r) => r.id === lineId);
-          if (routeBeforeAdd?.type === "bus" && routeBeforeAdd.stops.length >= 1) {
+          if ((routeBeforeAdd?.type === "bus" || routeBeforeAdd?.type === "streetcar") && routeBeforeAdd.stops.length >= 1) {
+            startShimmerRef.current(lineId);
             triggerAutoSnapRef.current(lineId);
           }
           // Geocode asynchronously and rename from temp name
@@ -1249,6 +1337,21 @@ export function TransitMap() {
               r.id === lineId ? { ...r, stops: r.stops.map(s => s.name === tempName ? { ...s, name: geoName } : s) } : r
             ));
           });
+          return;
+        }
+
+        // Portal placement mode
+        const portalLineId = addPortalToLineRef.current;
+        if (portalLineId) {
+          const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          snapshotHistory();
+          setRoutes((prev) => prev.map((r) => {
+            if (r.id !== portalLineId) return r;
+            // Snap portal coord to route shape
+            const shape = r.shape ?? r.stops.map((s) => s.coords);
+            const snapped = shape.length >= 2 ? snapToShape(coords, shape) : coords;
+            return { ...r, portals: [...(r.portals ?? []), { coords: snapped }] };
+          }));
         }
       });
 
@@ -1733,6 +1836,12 @@ export function TransitMap() {
 	      map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 2 : sc ? 3.5 : 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
 	      map.addLayer({ id: `stops-selected-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 9, filter: ["==", ["get", "name"], "__none__"], paint: { "circle-radius": bus ? 3.5 : sc ? 5 : 9, "circle-color": route.color, "circle-opacity": 0.5, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2, "circle-stroke-color": "#ffffff" } });
 	      map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 1.5 : sc ? 2 : 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2 } });
+      // Underground tunnel overlay
+      map.addSource(`underground-${route.id}`, { type: "geojson", data: undergroundToGeoJSON(route) });
+      map.addLayer({ id: `underground-line-${route.id}`, type: "line", source: `underground-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#1e1e2e", "line-width": bus ? 1.5 : sc ? 3 : 7, "line-opacity": 0.55, "line-dasharray": [2, 2] } });
+      // Portal markers
+      map.addSource(`portals-${route.id}`, { type: "geojson", data: portalsToGeoJSON(route) });
+      map.addLayer({ id: `portals-dot-${route.id}`, type: "circle", source: `portals-${route.id}`, paint: { "circle-radius": 5, "circle-color": "#1e1e2e", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5, "circle-opacity": 0.8 } });
 	      map.on("click", `route-line-${route.id}`, () => { const cur = routesRef.current.find(r => r.id === route.id) ?? route; setSelectedRoute(cur); setSelectedStop(null); });
 	      map.on("mouseenter", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 3 : sc ? 5 : 10); });
 	      map.on("mouseleave", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = ""; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 1.5 : sc ? 3 : 7); });
@@ -1894,10 +2003,10 @@ export function TransitMap() {
   function removeCustomLineFromMap(routeId: string) {
     const map = mapRef.current;
     if (!map) return;
-    [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`].forEach((id) => {
+    [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
     });
-    [`route-${routeId}`, `stops-${routeId}`].forEach((id) => {
+    [`route-${routeId}`, `stops-${routeId}`, `underground-${routeId}`, `portals-${routeId}`].forEach((id) => {
       if (map.getSource(id)) map.removeSource(id);
     });
   }
@@ -2140,7 +2249,7 @@ export function TransitMap() {
         <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
           <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50 shadow-sm">
             <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700">
-              <span>Click map to add station</span>
+              <span>{snapProgress?.routeId === addStationToLine ? "Placing…" : "Click map to add station"}</span>
               <span className="h-4 w-px bg-indigo-200" />
               <button
                 onClick={() => setAddStationToLine(null)}
@@ -2157,6 +2266,22 @@ export function TransitMap() {
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Add-portal notification — below top-center toolbar */}
+      {addPortalToLine && (
+        <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-xl border border-stone-300 bg-stone-800 px-4 py-2.5 text-sm text-white shadow-sm">
+            <span>Click route to place portal marker</span>
+            <span className="h-4 w-px bg-stone-600" />
+            <button
+              onClick={() => setAddPortalToLine(null)}
+              className="font-semibold hover:text-stone-300 transition-colors"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
@@ -2365,6 +2490,9 @@ export function TransitMap() {
             onDeleteLine={() => handleDeleteCustomLine(selectedRoute.id)}
             onSnapToRoads={routes.some((r) => r.id === selectedRoute.id)
               ? () => handleSnapToRoads(selectedRoute)
+              : undefined}
+            onAddPortal={routes.some((r) => r.id === selectedRoute.id)
+              ? () => { setAddPortalToLine(selectedRoute.id); addPortalToLineRef.current = selectedRoute.id; }
               : undefined}
             onClose={() => { setSelectedRoute(null); setSelectedStop(null); }}
           />

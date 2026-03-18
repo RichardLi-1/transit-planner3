@@ -10,6 +10,7 @@ export function RoutePanel({
   onDeleteStop,
   onDeleteLine,
   onSnapToRoads,
+  onAddPortal,
   onClose,
 }: {
   route: Route;
@@ -19,6 +20,8 @@ export function RoutePanel({
   onDeleteLine?: () => void;
   /** Called when the user requests road-snapping. Resolves when done, throws on error. */
   onSnapToRoads?: () => Promise<void>;
+  /** Called when the user wants to enter portal placement mode. */
+  onAddPortal?: () => void;
   onClose: () => void;
 }) {
   const [snapState, setSnapState] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -124,6 +127,21 @@ export function RoutePanel({
           {snapState === "error" && snapError && (
             <p className="mt-1.5 text-xs text-red-500 leading-snug">{snapError}</p>
           )}
+        </div>
+      )}
+
+      {onAddPortal && (
+        <div className="mx-5 mt-3">
+          <button
+            onClick={onAddPortal}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 py-2 text-xs font-medium text-stone-500 hover:border-stone-400 hover:text-stone-800 transition-colors"
+          >
+            <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 9 C2 5 4 3 6 3 C8 3 10 5 10 9"/>
+              <path d="M4 9 C4 6.5 5 5.5 6 5.5 C7 5.5 8 6.5 8 9"/>
+            </svg>
+            Add portal
+          </button>
         </div>
       )}
 
