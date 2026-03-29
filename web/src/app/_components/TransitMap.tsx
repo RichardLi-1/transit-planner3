@@ -21,6 +21,7 @@ import { NewLineModal } from "./map/NewLineModal";
 import { ExperimentalPanel } from "./map/ExperimentalPanel";
 import { GameMode } from "./map/GameMode";
 import { ChangelogModal } from "./map/ChangelogModal";
+import { FeedbackModal } from "./map/FeedbackModal";
 import { ChatPanel, type ParsedRoute, type ToolCallEvent } from "./ChatPanel";
 import { useUser } from "@auth0/nextjs-auth0/client";
 import Image from "next/image";
@@ -168,6 +169,7 @@ export function TransitMap() {
   const [experimentalFeatures, setExperimentalFeatures] = useState(false);
   const [showGoTrain, setShowGoTrain] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [imperial, setImperial] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -3063,21 +3065,25 @@ export function TransitMap() {
           />
         )}
 
-        {focusedNeighbourhood && (
-          <NeighbourhoodPanel
-            name={focusedNeighbourhood.name}
-            lat={focusedNeighbourhood.lat}
-            lng={focusedNeighbourhood.lng}
-            geometry={focusedNeighbourhood.geometry}
-            popRawData={popRawData}
-            trafficFeatures={trafficGeoJSON?.features ?? []}
-            onClose={() => setFocusedNeighbourhood(null)}
-          />
-        )}
       </div>
+
+        {focusedNeighbourhood && (
+          <div className="absolute bottom-6 left-6 pointer-events-auto z-20">
+            <NeighbourhoodPanel
+              name={focusedNeighbourhood.name}
+              lat={focusedNeighbourhood.lat}
+              lng={focusedNeighbourhood.lng}
+              geometry={focusedNeighbourhood.geometry}
+              popRawData={popRawData}
+              trafficFeatures={trafficGeoJSON?.features ?? []}
+              onClose={() => setFocusedNeighbourhood(null)}
+            />
+          </div>
+        )}
 
       {showGameMode && <GameMode routes={routes} onClose={() => setShowGameMode(false)} />}
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
 
       {/* Reset confirmation */}
       {showResetConfirm && (
@@ -3703,8 +3709,8 @@ export function TransitMap() {
           </button>
 
           {showSettingsMenu && (
-            <div className="absolute right-0 top-full mt-1.5 w-60 overflow-hidden rounded-xl border border-[#D7D7D7] bg-white shadow-lg z-30">
-              {/* Account section */}
+            <div className="max-h-[calc(75vh-5rem)] overflow-y-auto absolute right-0 top-full mt-1.5 w-60 rounded-xl border border-[#D7D7D7] bg-white shadow-lg z-30">
+              {/* Account section 
               <div className="px-4 py-3 border-b border-stone-100">
                 {authLoading ? (
                   <div className="h-8 w-full animate-pulse rounded-lg bg-stone-100" />
@@ -3722,7 +3728,7 @@ export function TransitMap() {
                       <a href="/auth/logout" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">Sign out</a>
                     </div>
                   </div>
-                ) : (
+                ) : <></>: (
                   <a
                     href="/auth/login"
                     className="flex w-full items-center gap-2 rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white hover:bg-stone-700 transition-colors"
@@ -3732,11 +3738,10 @@ export function TransitMap() {
                     </svg>
                     Sign in
                   </a>
-                )}
-              </div>
+                )*/}
 
               {/* Map layers */}
-              <div className="border-b border-stone-100 py-1">
+              <div className="border-b border-stone-100 py-3">
                 <p className="px-4 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-stone-300">Map layers</p>
                 {([
                   ["Coverage zones", showCoverageZones, () => setShowCoverageZones((v) => !v), "sky"] as const,
@@ -3809,7 +3814,7 @@ export function TransitMap() {
                   Docs
                 </a>
                 <a
-                  href="mailto:contact@transitplanner.app"
+                  href="mailto:richardli0@outlook.com"
                   className="flex w-full items-center gap-3 px-4 py-2 text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-colors"
                   onClick={() => setShowSettingsMenu(false)}
                 >
@@ -3818,18 +3823,15 @@ export function TransitMap() {
                   </svg>
                   Contact us
                 </a>
-                <a
-                  href="https://github.com/evanzyang91/transit-planner/discussions"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
                   className="flex w-full items-center gap-3 px-4 py-2 text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-700 transition-colors"
-                  onClick={() => setShowSettingsMenu(false)}
+                  onClick={() => { setShowFeedback(true); setShowSettingsMenu(false); }}
                 >
                   <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 8c0 3.314-2.686 6-6 6a6.003 6.003 0 0 1-5.197-3L2 12l1.197-2.803A6 6 0 1 1 14 8z" />
                   </svg>
                   Give feedback
-                </a>
+                </button>
                 <a
                   href="https://github.com/evanzyang91/transit-planner/issues/new?labels=bug&title=[Bug]+"
                   target="_blank"

@@ -134,7 +134,12 @@ cd web && npm run dev
 
 **Python backend:**
 ```bash
-cd python_server && uvicorn api.main:app --reload
+./python_server/run.sh
+```
+
+Or directly:
+```bash
+.venv/bin/uvicorn python_server.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir python_server --reload-dir python_utils
 ```
 
 Requires: Node.js 20+, Python 3.11+, PostgreSQL with PostGIS.
