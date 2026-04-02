@@ -1,184 +1,208 @@
+<div align="center">
+
+<img src="web/public/logo.png" alt="" width="150" height="150">
+
 # Transit Planner
 
-> **🏆 Winner — Hack Canada 2026**
+_Design smarter cities, one route at a time._
 
-Transit Planner is an AI-powered urban transit planning tool that simulates a city council deliberation to design, debate, and approve new transit routes. Built for Toronto, it combines multi-agent AI, real-time geospatial visualization, and voice narration to make transit planning accessible, transparent, and engaging.
+</div>
 
 ---
+
+## Overview
+
+Transit Planner is an AI-powered urban transit design tool built for city planners and researchers. Draw proposed subway routes on an interactive map of Toronto, and a council of AI agents — a transit planner, a cost analyst, a NIMBY resident, and a PR director — will debate the merits of your route in real time, drawing on real ridership data, population density, and infrastructure constraints.
+
+No spreadsheets. No guesswork. Just a map, your cursor, and four AIs arguing about your decisions.
 
 ## Features
 
-### AI Planning Council
-A structured 6-round deliberation where specialized AI agents debate a proposed transit route — each with distinct values, priorities, and personalities:
+- **Interactive route builder** — draw, edit, and delete subway lines directly on a live Mapbox map of Toronto's transit network
+- **AI route generation** — describe what you want and an AI assistant generates a proposed route
+- **Multi-agent council deliberation** — four distinct Claude-powered personas debate every proposed route, surfacing trade-offs across cost, ridership, community impact, and public relations
+- **Real ridership & population analysis** — stations are evaluated against real TTC boardings and PostGIS-based population heatmaps
+- **Neighbourhood context** — click any area to see demographic and traffic data for that zone
+- **Streaming responses** — all AI deliberation streams live via Server-Sent Events, so you see the debate unfold in real time
+- **Street view integration** — preview proposed stop locations at street level
 
-| Agent | Role | Model |
-|---|---|---|
-| **Alex Chen** | Ridership Planner — proposes routes for equity and underserved areas | Claude Sonnet |
-| **Jordan Park** | Infrastructure Analyst — critiques costs, ROI, and feasibility | Claude Sonnet |
-| **Margaret Thompson** | NIMBY Resident — raises neighborhood disruption concerns | Claude Haiku |
-| **Devon Walsh** | PR Director — flags gentrification and displacement risks | Claude Haiku |
-| **Alex & Jordan** | Joint Rebuttal — defend or revise the proposal | Claude Sonnet |
-| **Planning Commission** | Final Decision — issues a binding verdict with mitigations | Claude Sonnet |
+## Demo
 
-Each round streams in real-time. Routes update live on the map as agents propose alternatives.
+Navigate to `http://localhost:3000/map` after setup to open the interactive planner.
 
-### Interactive Map
-- Draw custom routes or boundaries directly on the map
-- Select neighborhoods and existing TTC stations as context
-- See population density, traffic levels, and employment overlays
-- View generated routes rendered in real-time as the council deliberates
-
-### 3D Globe Landing Page
-Animated Three.js globe with orbiting transit lines and trains, giving the app a cinematic entry point.
-
-### Voice Narration
-ElevenLabs text-to-speech narrates key quotes from each agent, with distinct voice IDs per character.
-
-### Session History
-All council sessions are persisted and replayable — review past deliberations and route outcomes.
-
----
+The AI council can be triggered from the route panel once a route is drawn or generated.
 
 ## Tech Stack
 
-**Frontend**
-- Next.js 15 (App Router, React 19)
-- TypeScript
-- Mapbox GL + MapboxDraw — interactive map and route drawing
-- Three.js + React Three Fiber — 3D globe visualization
-- Tailwind CSS 4
-- tRPC + React Query — type-safe API layer
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router), React 19, TypeScript |
+| Styling | Tailwind CSS 4 |
+| Mapping | Mapbox GL, Mapbox GL Draw |
+| 3D | Three.js / React Three Fiber |
+| AI Platform | Backboard.io (Claude Haiku 4.5 & Sonnet 4.5) |
+| Auth | NextAuth.js v5 |
+| Database | PostgreSQL (multiple instances), Supabase (PostGIS) |
+| Python Backend | FastAPI, SQLAlchemy, Alembic |
+| Validation | Zod (TS), Pydantic (Python) |
+| Containerization | Docker, Docker Compose |
+| Deployment | Vercel (frontend) |
 
-**Backend**
-- FastAPI (Python) — core AI orchestration engine
-- Backboard.io — LLM API wrapper with thread-based conversations
-- Anthropic Claude (Haiku 4.5 + Sonnet 4.5)
-- ElevenLabs — text-to-speech per agent voice
-- PostgreSQL + PostGIS — geospatial transit data
-- Supabase — hosted database
-- Go — routing management API
+## How It Works
 
-**Infrastructure**
-- Monorepo with npm workspaces
-- Docker
-- GitHub Actions (CI/CD)
+1. A planner draws or generates a new subway route on the map
+2. The route — along with station locations, population data, and ridership figures — is passed to the AI council
+3. Four Claude personas deliberate in structured turns:
+   - **Alex** (Transit Planner) — proposes and defends the route
+   - **Jordan** (Cost Analyst) — scrutinizes budget and infrastructure cost
+   - **Margaret** (NIMBY Resident) — raises community and construction concerns
+   - **Devon** (PR Director) — evaluates public perception and political feasibility
+4. The council reaches a verdict with actionable feedback
+5. The planner adjusts and re-submits — or proceeds to export
 
----
+## Local Development
 
-## Architecture
+### Prerequisites
 
-transit-planner/
-
-├── web/                    # Next.js frontend
-│   └── src/app/
-│       ├── page.tsx        # Landing page (3D globe)
-│       ├── map/page.tsx    # Main planning interface
-│       └── api/
-│           ├── council/    # Proxies to Python AI backend (SSE)
-│           ├── tts/        # ElevenLabs text-to-speech
-│           ├── traffic/    # Traffic data
-│           └── population/ # Population density data
-│
-├── python_server/          # FastAPI — AI council engine
-│   └── api/
-│       ├── council.py      # 6-round multi-agent orchestration
-
-│       ├── backboard.py    # LLM API wrapper (Claude via Backboard.io)
-
-│       └── data_tools.py   # PostGIS queries, neighborhood GeoJSON
-
-│
-├── go_server/              # Routing management API
-
-├── express_server/         # Express backend (optional services)
-
-├── web_db/                 # Prisma schema
-
-└── python_utils/           # Shared DB models (SQLAlchemy + PostGIS)
-
-
-
-
-
-
-**Data flow:**
-1. User selects neighborhoods/stations and submits a planning request
-2. Next.js `/api/council` proxies the request to the Python FastAPI backend
-3. Python fetches relevant transit data from PostgreSQL/PostGIS
-4. The council orchestrator opens 6 sequential LLM threads via Backboard.io
-5. Each agent streams their response back via Server-Sent Events
-6. Frontend parses SSE events, updates the chat panel and map in real-time
-7. Final approved route is rendered on the Mapbox map
-
----
-
-## Getting Started
+- Node.js 20+
+- Python 3.12+
+- A [Mapbox account](https://account.mapbox.com) (free tier works)
+- A [Backboard.io account](https://app.backboard.io) for AI features
+- A [Supabase project](https://supabase.com) with PostGIS enabled (for population/traffic layers)
 
 ### Setup
 
 ```bash
-# Install all dependencies (root + web workspace)
+# Clone and install
+git clone https://github.com/evanzyang91/transit-planner.git
+cd transit-planner
 npm install
 
-# Install Python dependencies
-cd python_server && pip install -r requirements.txt
-
-# Copy and fill in environment variables
+# Configure environment
 cp .env.example .env
+# Fill in the required values (see below)
+
+# Start the Next.js frontend
+npm run dev
 ```
 
-**Frontend:**
+Frontend runs at `http://localhost:3000`.
+
+### Python Backend (for council deliberation & ridership data)
+
 ```bash
-cd web && npm run dev
+# From the repo root with a virtual environment active
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+python -m uvicorn python_server.api.main:app --reload --port 8000
 ```
 
-**Python backend:**
+Backend runs at `http://localhost:8000`.
+
+### Docker (all services)
+
 ```bash
-./python_server/run.sh
+docker-compose up
 ```
 
-Or directly:
+### Available Scripts
+
 ```bash
-.venv/bin/uvicorn python_server.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir python_server --reload-dir python_utils
+npm run dev            # Start Next.js with Turbopack
+npm run build          # Production build
+npm run start          # Serve production build
+npm run lint           # ESLint
+npm run typecheck      # TypeScript checks
+npm run format:write   # Auto-format with Prettier
 ```
 
-Requires: Node.js 20+, Python 3.11+, PostgreSQL with PostGIS.
+## Environment Variables
 
----
+Create a `.env` file at the repo root from `.env.example`:
 
-### Required Environment Variables
+```bash
+# Mapbox — required for map rendering
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.ey...
 
-**`web/.env.local`** (Next.js frontend)
+# Backboard.io — required for AI council and route generation
+BACKBOARD_API_KEY=espr_...
 
-| Variable | Description |
+# Supabase — required for population heatmap and traffic layers
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_anon_key
+
+# NextAuth — required for authentication
+NEXTAUTH_URL=http://localhost:3000
+AUTH_SECRET=                      # generate with: openssl rand -base64 32
+
+# Python backend URL (used by Next.js to proxy ridership requests)
+PYTHON_SERVER_URL=http://localhost:8000
+
+# PostgreSQL — multiple instances for service isolation
+DATABASE_URL_GO=postgresql://postgres:postgres@localhost:5433/genghis
+DATABASE_URL_PYTHON=postgresql://postgres:postgres@localhost:5434/genghis
+DATABASE_URL_EXPRESS=postgresql://postgres:postgres@localhost:5435/genghis
+DATABASE_URL_WEB=postgresql://postgres:postgres@localhost:5436/genghis
+```
+
+**Where to get keys:**
+- **Mapbox**: [account.mapbox.com](https://account.mapbox.com) → Tokens
+- **Backboard**: [app.backboard.io](https://app.backboard.io) → API Keys
+- **Supabase**: [supabase.com](https://supabase.com) → Project Settings → API
+
+## Project Structure
+
+```
+transit-planner/
+├── web/                        # Next.js app
+│   └── src/
+│       ├── app/
+│       │   ├── map/            # Main map page
+│       │   ├── api/            # API routes (AI, auth, data)
+│       │   └── _components/    # UI components
+│       └── server/             # Server-side clients (Backboard, Supabase, etc.)
+├── python_server/              # FastAPI backend
+│   └── api/
+│       ├── main.py             # App entrypoint & CORS
+│       ├── council.py          # Multi-agent deliberation logic
+│       └── ridership.py        # Transit ridership queries
+├── python_utils/               # DB migrations (Alembic)
+├── docker-compose.yml
+├── Dockerfile.web
+├── Dockerfile.web-backend
+└── .env.example
+```
+
+## API Overview
+
+### Next.js Routes
+
+| Route | Purpose |
 |---|---|
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox GL public token — map rendering |
-| `BACKBOARD_API_KEY` | Backboard.io API key — proxies Claude requests |
-| `ELEVENLABS_KEY` | ElevenLabs API key — agent voice narration |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon/service key |
-| `PYTHON_SERVER_URL` | URL of the FastAPI backend (default: `http://localhost:8000`) |
-| `GOOGLE_MAPS_API_KEY` | Google Maps API key — Street View panel |
-| `AUTH0_SECRET` | Long random string for session encryption |
-| `AUTH0_BASE_URL` | App base URL (e.g. `http://localhost:3000`) |
-| `AUTH0_ISSUER_BASE_URL` | Auth0 domain (e.g. `https://your-tenant.auth0.com`) |
-| `AUTH0_CLIENT_ID` | Auth0 application client ID |
-| `AUTH0_CLIENT_SECRET` | Auth0 application client secret |
+| `POST /api/backboard/chat` | Stream AI assistant responses (SSE) |
+| `POST /api/backboard/station-summary` | AI summary for a station |
+| `POST /api/council` | Trigger multi-agent council deliberation |
+| `GET /api/traffic` | Traffic data from Supabase |
+| `POST /api/ridership/station` | Station-level boardings |
+| `POST /api/ridership/line` | Line-level ridership |
+| `GET /api/population` | Population heatmap data |
+| `GET /api/streetview` | Street view imagery |
 
-**`python_server/.env`** (FastAPI backend)
+### Python Backend (`:8000`)
 
-| Variable | Description |
+| Route | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key — used if not routing via Backboard |
-| `BACKBOARD_KEY` | Backboard.io key — Claude via Backboard |
-| `SUPABASE_DB_URL` | PostgreSQL connection string with PostGIS |
+| `GET /health` | Health check |
+| `POST /council` | Council deliberation with streaming |
+| `POST /ridership/station` | Station boardings query |
+| `POST /ridership/line` | Line ridership query |
 
-## Inspirations
-[JPW Brand New Subway](https://jpwright.github.io/subway/)
+## Contributing
 
-Built At
-Hack Canada 2026 — Top 10 Google - Build with AI Track
+PRs are welcome. For anything beyond small fixes, open an issue first so we can align on approach.
 
+## License
 
-## **License**
-MIT
+[MIT](LICENSE).
