@@ -6,6 +6,8 @@ _Design smarter cities, one route at a time._
 
 </div>
 
+<video src="assets/video.mp4" width="320" height="240" controls></video>
+
 ---
 
 ## Overview
