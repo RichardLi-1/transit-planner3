@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { RefObject } from "react";
-import type mapboxgl from "mapbox-gl";
+import mapboxgl from "mapbox-gl";
 import { ROUTES } from "~/app/map/transit-data";
 
 // Convert a compass bearing in degrees (0 = North, clockwise) to a short direction label.
