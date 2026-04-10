@@ -2,6 +2,7 @@ import "~/styles/globals.css";
 
 import { type Metadata } from "next";
 import { Auth0Provider } from "@auth0/nextjs-auth0/client";
+import MobileWarningModal from "./_components/MobileWarningModal";
 
 export const metadata: Metadata = {
   title: "Transit Planner",
@@ -22,6 +23,7 @@ export default function RootLayout({
       </head>
       <body>
         <Auth0Provider>
+          <MobileWarningModal />
           {children}
         </Auth0Provider>
       </body>

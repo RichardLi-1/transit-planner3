@@ -43,6 +43,15 @@ const VERSIONS: Version[] = [
         ],
       },
       {
+        section: "Mobile",
+        items: [
+          "Mobile layout: bottom tab bar replaces the desktop sidebar on small screens",
+          "Bottom sheets for Lines, Tools, and Settings — map stays visible above",
+          "Draw mode strip above the tab bar for adding and editing stops on mobile",
+          "Desktop panels and toolbar hidden on mobile to avoid overlap",
+        ],
+      },
+      {
         section: "Bug fixes",
         items: [
           "Fixed feedback modal layout",

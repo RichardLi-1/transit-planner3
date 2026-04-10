@@ -20,6 +20,7 @@ import { StationPopup } from "./map/StationPopup";
 import { NewLineModal } from "./map/NewLineModal";
 import { ExperimentalPanel } from "./map/ExperimentalPanel";
 import { GameMode } from "./map/GameMode";
+import { MobileNav } from "./MobileNav";
 import { ChangelogModal } from "./map/ChangelogModal";
 import { FeedbackModal } from "./map/FeedbackModal";
 import { ChatPanel, type ParsedRoute, type ToolCallEvent } from "./ChatPanel";
@@ -2642,8 +2643,8 @@ export function TransitMap() {
     <div className="relative h-full w-full">
 	      <div ref={containerRef} className="h-full w-full" />
 
-	      {/* TTC Lines legend + neighbourhood panel — top left */}
-	      <div className="absolute top-6 left-6 flex flex-col pointer-events-auto" style={{ maxHeight: "calc(100vh - 48px)" }}>
+	      {/* TTC Lines legend + neighbourhood panel — top left (desktop only) */}
+	      <div className="hidden md:flex absolute top-6 left-6 flex-col pointer-events-auto" style={{ maxHeight: "calc(100vh - 48px)" }}>
 	        <div className="rounded-xl border border-[#D7D7D7] bg-white shadow-sm w-64 flex flex-col overflow-hidden shrink-0" style={experimentalFeatures ? { height: linesHeight } : { maxHeight: "calc(100vh - 96px)" }}>
 	          {/* sticky header */}
 	          <div className="px-4 pt-4 pb-2 shrink-0">
@@ -2795,14 +2796,6 @@ export function TransitMap() {
 	              <span className="text-base leading-none">+</span>
 	              New Line
 	            </button>
-	            {advancedMode && (
-	              <button
-	                onClick={() => setShowGameMode(true)}
-	                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors"
-	              >
-	                🎮 Game Mode
-	              </button>
-	            )}
 	          </div>
 	        </div>
 
@@ -2871,6 +2864,7 @@ export function TransitMap() {
             isoMode={isoMode}
             onSetIsoMode={setIsoMode}
             onSimUpdate={(hour, activeIds) => setSimState(hour !== null ? { hour, activeIds } : null)}
+            onOpenGameMode={() => setShowGameMode(true)}
           />
         )}
 
@@ -2993,8 +2987,8 @@ export function TransitMap() {
         </div>
       )}
 
-      {/* Top-center toolbar */}
-      <div className="pointer-events-none absolute top-5 left-0 right-0 flex justify-center gap-2">
+      {/* Top-center toolbar (desktop only) */}
+      <div className="pointer-events-none hidden md:flex absolute top-5 left-0 right-0 justify-center gap-2">
         {/* Heatmap toggle */}
         <button
           onClick={() => setShowHeatmap((v) => !v)}
@@ -3890,6 +3884,24 @@ export function TransitMap() {
           }}
         />
       )}
+
+      {/* Mobile nav — only rendered below the md breakpoint (768px) */}
+      <div className="md:hidden">
+        <MobileNav
+          routes={routes}
+          onNewLine={() => setShowNewLineModal(true)}
+          showHeatmap={showHeatmap}
+          onToggleHeatmap={() => setShowHeatmap((v) => !v)}
+          showTraffic={showTraffic}
+          onToggleTraffic={() => setShowTraffic((v) => !v)}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode((v) => !v)}
+          onResetProject={() => setShowResetConfirm(true)}
+          drawMode={drawMode}
+          onSetDrawMode={handleSetDrawMode}
+          onOpenGameMode={() => setShowGameMode(true)}
+        />
+      </div>
     </div>
   );
 }

@@ -538,6 +538,7 @@ interface Props {
   isoMode?: "walking" | "cycling" | "driving";
   onSetIsoMode?: (m: "walking" | "cycling" | "driving") => void;
   onSimUpdate?: (hour: number | null, activeIds: string[]) => void;
+  onOpenGameMode?: () => void;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -558,6 +559,7 @@ export function ExperimentalPanel({
   style,
   isoMode = "walking", onSetIsoMode,
   onSimUpdate,
+  onOpenGameMode,
 }: Props) {
   const fmtDist = (km: number) => imperial
     ? `${(km * 0.621371).toFixed(2)} mi`
@@ -738,6 +740,16 @@ export function ExperimentalPanel({
                     <p className="mt-0.5 text-[9px] text-stone-400 leading-tight">{desc}</p>
                   </button>
                 ))}
+                {onOpenGameMode && (
+                  <button
+                    onClick={onOpenGameMode}
+                    className="text-left rounded-xl border border-violet-100 bg-violet-50 px-2.5 py-2.5 hover:border-violet-200 hover:bg-violet-50/80 transition-all group"
+                  >
+                    <span className="text-base leading-none">🎮</span>
+                    <p className="mt-1 text-[11px] font-semibold text-violet-700 leading-tight">Game Mode</p>
+                    <p className="mt-0.5 text-[9px] text-violet-400 leading-tight">Interactive planning game</p>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1709,6 +1721,8 @@ export function ExperimentalPanel({
           )}
         </>
       )}
+
+
     </div>
   );
 }
