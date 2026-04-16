@@ -16,7 +16,6 @@ loadEnvConfig(projectRoot);
 
 await import("./src/env.js");
 
-/** @type {import("next").NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
 
 const csp = [
@@ -37,18 +36,12 @@ const csp = [
   "upgrade-insecure-requests",
 ].join("; ");
 
+/** @type {import("next").NextConfig} */
 const config = {
   // Tell Vercel's build adapter where the monorepo root is.
   // Without this, onBuildComplete can't find next.config.js and receives
   // undefined paths, causing: "The path argument must be of type string."
   outputFileTracingRoot: projectRoot,
-
-  // npm workspaces hoists mapbox-gl to the monorepo root's node_modules
-  // (one directory above web/). Next.js's CSS rules normally restrict
-  // processing to within the project directory. transpilePackages tells
-  // Next.js to run these packages through the full webpack pipeline,
-  // which handles cross-directory paths correctly.
-  transpilePackages: ["mapbox-gl", "@mapbox/mapbox-gl-draw"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
