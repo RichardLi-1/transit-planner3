@@ -25,18 +25,23 @@ console.log("✓ Copied mapbox-gl.css to public/");
 // 📖 Learn: npm "optional dependencies" and NAPI-RS platform packages
 if (process.platform === "linux") {
   try {
-    const lightningcssDir = path.dirname(
-      require.resolve("lightningcss/package.json")
-    );
-    // lightningcss tries to load the binary from one directory UP from node/index.js,
-    // which is the package root itself
+    // require.resolve('lightningcss') returns the package's main entry point:
+    //   .../lightningcss/node/index.js
+    // We go up one directory (out of node/) to reach the package root:
+    //   .../lightningcss/
+    // We can't use require.resolve('lightningcss/package.json') because the
+    // package's "exports" field blocks access to package.json directly.
+    // 📖 Learn: Node.js package "exports" field (subpath exports)
+    const lightningcssNodeDir = path.dirname(require.resolve("lightningcss"));
+    const lightningcssDir = path.resolve(lightningcssNodeDir, "..");
+
     const binaryName = "lightningcss.linux-x64-gnu.node";
     const dest = path.join(lightningcssDir, binaryName);
 
     if (!fs.existsSync(dest)) {
-      const platformPkgDir = path.dirname(
-        require.resolve("lightningcss-linux-x64-gnu/package.json")
-      );
+      // The platform binary package is installed as a sibling in node_modules:
+      //   .../node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node
+      const platformPkgDir = path.resolve(lightningcssDir, "..", "lightningcss-linux-x64-gnu");
       const src = path.join(platformPkgDir, binaryName);
 
       if (fs.existsSync(src)) {
@@ -45,6 +50,8 @@ if (process.platform === "linux") {
       } else {
         console.warn("⚠ lightningcss binary not found at:", src);
         console.warn("  Tailwind CSS compilation may fail.");
+        console.warn("  platformPkgDir:", platformPkgDir);
+        console.warn("  lightningcssDir:", lightningcssDir);
       }
     } else {
       console.log("✓ lightningcss Linux binary already in place");
