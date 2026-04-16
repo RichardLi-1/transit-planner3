@@ -17,7 +17,8 @@
       "Bash(find /Users/richardli/dev/transit-flow/client/public -name *.txt -o -name *.json -o -name *.geojson)",
       "Bash(npm install:*)",
       "Bash(git stash:*)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(ls /Users/richardli/dev/transit-planner-1/web/src/lib/timetable*)"
     ]
   }
 }

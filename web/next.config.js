@@ -38,10 +38,6 @@ const csp = [
 
 /** @type {import("next").NextConfig} */
 const config = {
-  // Tell Vercel's build adapter where the monorepo root is.
-  // Without this, onBuildComplete can't find next.config.js and receives
-  // undefined paths, causing: "The path argument must be of type string."
-  outputFileTracingRoot: projectRoot,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
