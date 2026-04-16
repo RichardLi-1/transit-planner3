@@ -16,7 +16,8 @@
       "Bash(grep -rn \"export.*function\\\\|export.*const\" /Users/richardli/dev/transit-planner-1/web/src/lib/gtfs*.ts)",
       "Bash(find /Users/richardli/dev/transit-flow/client/public -name *.txt -o -name *.json -o -name *.geojson)",
       "Bash(npm install:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(gh run *)"
     ]
   }
 }
