@@ -20,6 +20,9 @@
       "Bash(gh run *)",
       "Bash(ls /Users/richardli/dev/transit-planner-1/web/src/lib/timetable*)",
       "Bash(ls /Users/richardli/dev/transit-planner-1/web/tailwind.config*)"
+    ],
+    "additionalDirectories": [
+      "/Users/richardli/dev/transit-planner-1/web"
     ]
   }
 }

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node -e \"const fs=require('fs');const src=require.resolve('mapbox-gl/dist/mapbox-gl.css');fs.copyFileSync(src,'public/mapbox-gl.css');console.log('Copied mapbox-gl.css to public/')\"",
+    "prebuild": "node scripts/setup.js",
     "build": "next build",
     "check": "next lint && tsc --noEmit",
     "dev": "next dev --turbo",
