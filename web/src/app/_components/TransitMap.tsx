@@ -2962,21 +2962,21 @@ export function TransitMap() {
       {/* Add-station notification — below top-center toolbar */}
       {addStationToLine && (
         <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
-          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50 shadow-sm">
-            <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700">
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-indigo-200 dark:border-indigo-700 bg-indigo-100 shadow-sm">
+            <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-700 dark:text-indigo-200">
               <span>{snapProgress?.routeId === addStationToLine ? "Placing…" : "Click map to add station"}</span>
-              <span className="h-4 w-px bg-indigo-200" />
+              <span className="h-4 w-px bg-indigo-200 dark:bg-indigo-700" />
               <button
                 onClick={() => setAddStationToLine(null)}
-                className="font-semibold hover:text-indigo-900 transition-colors"
+                className="font-semibold hover:text-indigo-900 dark:hover:text-indigo-100 transition-colors"
               >
                 Done
               </button>
             </div>
             {snapProgress?.routeId === addStationToLine && (
-              <div className="h-0.5 bg-indigo-100">
+              <div className="h-0.5 bg-indigo-100 dark:bg-indigo-800">
                 <div
-                  className="h-full bg-indigo-400 transition-[width] duration-500 ease-out"
+                  className="h-full bg-indigo-400 dark:bg-indigo-400 transition-[width] duration-500 ease-out"
                   style={{ width: `${snapProgress.pct}%` }}
                 />
               </div>
@@ -3044,6 +3044,7 @@ export function TransitMap() {
           <div className="group relative">
             <button
               onClick={() => handleSetDrawMode("normal")}
+              aria-label="Explore mode"
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
                 drawMode === "normal" ? "bg-stone-100 text-stone-900" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
               }`}
@@ -3065,6 +3066,7 @@ export function TransitMap() {
           <div className="group relative">
             <button
               onClick={() => handleSetDrawMode("select")}
+              aria-label="Select neighbourhoods"
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
                 drawMode === "select" ? "bg-indigo-50 text-indigo-600" : "text-stone-400 hover:bg-stone-50 hover:text-stone-700"
               }`}
@@ -3114,6 +3116,7 @@ export function TransitMap() {
             <button
               onClick={handleUndo}
               disabled={!canUndo}
+              aria-label="Undo"
               className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-stone-50 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -3130,6 +3133,7 @@ export function TransitMap() {
             <button
               onClick={handleRedo}
               disabled={!canRedo}
+              aria-label="Redo"
               className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-stone-50 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -3150,6 +3154,7 @@ export function TransitMap() {
               <div className="group relative">
                 <button
                   onClick={handleClearAll}
+                  aria-label="Clear selection"
                   className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition-all hover:bg-red-50 hover:text-red-500"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

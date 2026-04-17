@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { InfoNav } from "../../_components/InfoNav";
 import { InfoFooter } from "../../_components/InfoFooter";
+import { DocsChatWidget } from "../_components/DocsChatWidget";
 
 const LAST_UPDATED = "March 16, 2026";
 
@@ -481,6 +482,7 @@ export default function TechnicalDocsPage() {
       </div>
 
       <InfoFooter />
+      <DocsChatWidget />
     </div>
   );
 }

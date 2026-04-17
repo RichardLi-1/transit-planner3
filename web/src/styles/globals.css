@@ -36,6 +36,8 @@ html.dark .bg-violet-50      { background-color: rgba(139,92,246,0.12)  !importa
 html.dark .bg-sky-50         { background-color: rgba(14,165,233,0.12)  !important; }
 html.dark .bg-rose-50        { background-color: rgba(244,63,94,0.12)   !important; }
 html.dark .bg-indigo-50      { background-color: rgba(99,102,241,0.12)  !important; }
+/* Solid indigo surface (notifications/banners that must be opaque) */
+html.dark .bg-indigo-100     { background-color: rgba(99,102,241,0.85)  !important; }
 
 /* Primary action buttons — invert to light so they still pop */
 html.dark .bg-stone-800      { background-color: #e5e5ea !important; }
@@ -46,10 +48,10 @@ html.dark .hover\:bg-stone-700:hover { background-color: #d1d1d6 !important; }
 /* Text */
 html.dark .text-stone-800    { color: #f5f5f7 !important; }
 html.dark .text-stone-700    { color: #e5e5ea !important; }
-html.dark .text-stone-600    { color: #aeaeb2 !important; }
-html.dark .text-stone-500    { color: #8e8e93 !important; }
-html.dark .text-stone-400    { color: #636366 !important; }
-html.dark .text-stone-300    { color: #48484a !important; }
+html.dark .text-stone-600    { color: #c7c7cc !important; }
+html.dark .text-stone-500    { color: #aeaeb2 !important; }
+html.dark .text-stone-400    { color: #8e8e93 !important; }
+html.dark .text-stone-300    { color: #636366 !important; }
 
 /* Borders */
 html.dark .border-stone-200     { border-color: #3a3a3c !important; }

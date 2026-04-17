@@ -275,6 +275,14 @@ export default function LandingPage() {
             Start Mapping
             <span style={{color: "white", fontWeight: 700}}>→</span>
           </Link>
+
+          <Link
+            href="/about"
+            className="mt-4 text-xs text-stone-400 underline-offset-2 transition-colors hover:text-stone-600 hover:underline"
+            style={{ ...fadeUp("0.45s") }}
+          >
+            Read more
+          </Link>
         </div>
       </div>
     </main>
