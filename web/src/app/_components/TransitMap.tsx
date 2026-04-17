@@ -1430,66 +1430,69 @@ export function TransitMap() {
       );
 
       // Population heatmap — initialize with empty data, then sync via effect
-      map.addSource("population", {
-        type: "geojson",
-        data: { type: "FeatureCollection" as const, features: [] },
-      });
+      // Guard: useHeatmap may have already added this source if style.load fired first
+      if (!map.getSource("population")) {
+        map.addSource("population", {
+          type: "geojson",
+          data: { type: "FeatureCollection" as const, features: [] },
+        });
 
-      // Population heatmap — fades out as you zoom in
-      map.addLayer(
-        {
-          id: "population-heatmap",
-          type: "heatmap",
-          source: "population",
-          paint: {
-            "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
-            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 0.4, 13, 0.8],
-            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 10, 12, 28, 13, 50],
-            "heatmap-color": [
-              "interpolate", ["linear"], ["heatmap-density"],
-              0,    "rgba(0,0,0,0)",
-              0.2,  "rgba(0,104,55,0.15)",
-              0.4,  "rgba(102,189,99,0.5)",
-              0.6,  "rgba(255,255,51,0.8)",
-              0.8,  "rgba(253,141,60,0.9)",
-              1,    "rgba(215,25,28,1)",
-            ],
-            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 10, 0.75, 13, 0.3, 15, 0],
+        // Population heatmap — fades out as you zoom in
+        map.addLayer(
+          {
+            id: "population-heatmap",
+            type: "heatmap",
+            source: "population",
+            paint: {
+              "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
+              "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 0.4, 13, 0.8],
+              "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 10, 12, 28, 13, 50],
+              "heatmap-color": [
+                "interpolate", ["linear"], ["heatmap-density"],
+                0,    "rgba(0,0,0,0)",
+                0.2,  "rgba(0,104,55,0.15)",
+                0.4,  "rgba(102,189,99,0.5)",
+                0.6,  "rgba(255,255,51,0.8)",
+                0.8,  "rgba(253,141,60,0.9)",
+                1,    "rgba(215,25,28,1)",
+              ],
+              "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 9, 0, 10, 0.75, 13, 0.3, 15, 0],
+            },
           },
-        },
-        firstLabelLayer,
-      );
+          firstLabelLayer,
+        );
 
-      // Population circle points — fade in as you zoom in past the heatmap
-      map.addLayer(
-        {
-          id: "population-points",
-          type: "circle",
-          source: "population",
-          minzoom: 12,
-          paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              15, 2,
-              17, 4,
-              19, 8,
-            ],
-            "circle-color": [
-              "interpolate", ["linear"], ["get", "weight"],
-              0,    "rgb(0,104,55)",
-              0.3,  "rgb(102,189,99)",
-              0.5,  "rgb(255,255,51)",
-              0.7,  "rgb(253,141,60)",
-              0.85, "rgb(253,141,60)",
-              1,    "rgb(215,25,28)",
-            ],
-            "circle-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 17, 0.75],
-            "circle-stroke-width": 0.5,
-            "circle-stroke-color": "rgba(255,255,255,0.5)",
+        // Population circle points — fade in as you zoom in past the heatmap
+        map.addLayer(
+          {
+            id: "population-points",
+            type: "circle",
+            source: "population",
+            minzoom: 12,
+            paint: {
+              "circle-radius": [
+                "interpolate", ["linear"], ["zoom"],
+                15, 2,
+                17, 4,
+                19, 8,
+              ],
+              "circle-color": [
+                "interpolate", ["linear"], ["get", "weight"],
+                0,    "rgb(0,104,55)",
+                0.3,  "rgb(102,189,99)",
+                0.5,  "rgb(255,255,51)",
+                0.7,  "rgb(253,141,60)",
+                0.85, "rgb(253,141,60)",
+                1,    "rgb(215,25,28)",
+              ],
+              "circle-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 17, 0.75],
+              "circle-stroke-width": 0.5,
+              "circle-stroke-color": "rgba(255,255,255,0.5)",
+            },
           },
-        },
-        firstLabelLayer,
-      );
+          firstLabelLayer,
+        );
+      }
 
       // Canada population density — served as XYZ vector tiles from PMTiles file
       map.addSource("canada-pop", {
@@ -1527,41 +1530,44 @@ export function TransitMap() {
       );
 
       // Traffic lines — initialize with empty data, then sync via effect
-      map.addSource("traffic", {
-        type: "geojson",
-        data: { type: "FeatureCollection" as const, features: [] },
-      });
+      // Guard: useTraffic may have already added this source if style.load fired first
+      if (!map.getSource("traffic")) {
+        map.addSource("traffic", {
+          type: "geojson",
+          data: { type: "FeatureCollection" as const, features: [] },
+        });
 
-      map.addLayer(
-        {
-          id: "traffic-lines",
-          type: "line",
-          source: "traffic",
-          layout: { "line-join": "round", "line-cap": "round", visibility: "none" },
-          paint: {
-            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 14, 4],
-            "line-color": [
-              "case",
-              ["!=", ["get", "avg_traffic"], null],
-              [
-                "match",
-                ["get", "traffic_color"],
-                "green",
-                "#22c55e",
-                "yellow",
-                "#f59e0b",
-                "red",
-                "#ef4444",
+        map.addLayer(
+          {
+            id: "traffic-lines",
+            type: "line",
+            source: "traffic",
+            layout: { "line-join": "round", "line-cap": "round", visibility: "none" },
+            paint: {
+              "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 14, 4],
+              "line-color": [
+                "case",
+                ["!=", ["get", "avg_traffic"], null],
+                [
+                  "match",
+                  ["get", "traffic_color"],
+                  "green",
+                  "#22c55e",
+                  "yellow",
+                  "#f59e0b",
+                  "red",
+                  "#ef4444",
+                  "#22c55e"
+                ],
                 "#22c55e"
               ],
-              "#22c55e"
-            ],
 
-            "line-opacity": 0.5,
+              "line-opacity": 0.5,
+            },
           },
-        },
-        firstLabelLayer,
-      );
+          firstLabelLayer,
+        );
+      }
 
       // ── Shared bus layers (2 GeoJSON sources, 4 layers — replaces per-route bus layers)
       const visibleBusRouteIds = new Set(
@@ -2734,8 +2740,16 @@ export function TransitMap() {
 	                                <span className="text-[11px] font-bold leading-none whitespace-nowrap" style={{ color: r.textColor ?? "#ffffff" }}>{r.shortName}</span>
 	                              </button>
 	                              <button
-	                                className={`flex-1 truncate text-left text-sm transition-colors ${isActive ? "font-semibold text-stone-900" : isHidden ? "text-stone-300" : "text-stone-600 hover:text-stone-900"}`}
-	                                onClick={() => setSelectedRoute(r)}
+	                                className={`flex-1 truncate text-left text-sm transition-colors ${isActive ? "font-semibold text-stone-900 dark:text-stone-100" : isHidden ? "text-stone-300 dark:text-stone-600" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"}`}
+	                                onClick={() => {
+	                                  if (!isActive) {
+	                                    handleSetDrawMode("normal");
+	                                    snapshotHistory();
+	                                    if (isHidden) setHiddenRoutes((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+	                                    promoteIfNeeded();
+	                                  }
+	                                  setAddStationToLine(isActive ? null : r.id);
+	                                }}
 	                              >{r.name}</button>
 	                              <div className={`flex items-center overflow-hidden transition-[max-width] duration-150 ${isActive ? "max-w-16" : "max-w-0 group-hover:max-w-16"}`}>
 	                                <button
