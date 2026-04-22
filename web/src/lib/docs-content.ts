@@ -73,7 +73,7 @@ in src/app and src/lib. Server-side API routes live under src/app/api.
 - Three.js — 3D globe on landing page only
 - Auth0 — Authentication
 - Supabase (PostgreSQL + PostGIS) — Data persistence
-- Backboard.io / Claude — AI council agents
+- Anthropic Claude — AI council agents
 - ElevenLabs — TTS for agent voice quotes
 - Google Sans — Typography
 
@@ -138,7 +138,7 @@ type Stop = { id?: string; name: string; coords: [number, number] }; // [lng, la
 - AUTH0_CLIENT_SECRET (Optional): Auth0 application client secret. Server-side only.
 - NEXT_PUBLIC_SUPABASE_URL (Optional): Supabase project URL.
 - NEXT_PUBLIC_SUPABASE_ANON_KEY (Optional): Supabase anonymous public key.
-- BACKBOARD_API_KEY: Backboard.io API key for AI council agents.
+- ANTHROPIC_API_KEY: Anthropic API key for AI council agents.
 - ELEVENLABS_KEY: ElevenLabs API key for agent voice TTS.
 - DISCORD_WEBHOOK_URL (Optional): For analytics/notifications.
 
@@ -147,7 +147,7 @@ type Stop = { id?: string; name: string; coords: [number, number] }; // [lng, la
 - r5 routing integration: Integration with r5 routing engine and open-source equity libraries.
 - Accessibility dashboard: Dashboard for travel times, accessibility results, and equity indicators.
 - Expanded exports: Export formats beyond GTFS — maps, full datasets, and summary reports.
-- Migrate AI off Backboard to direct Anthropic SDK with tool use support.
+- AI council and chat now run directly on Anthropic.
 - AI agent tool calls: query_stops_near(lat, lng, radius_m), get_population_density(bbox), etc.
 `.trim();
 

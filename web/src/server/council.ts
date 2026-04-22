@@ -5,7 +5,7 @@ import { createAssistant, createThread, streamMessage } from "./anthropic";
 // ── Models ─────────────────────────────────────────────────────────────────────
 
 const HAIKU = "claude-haiku-4-5-20251001";
-const SONNET = "claude-sonnet-4-5-20251101";
+const SONNET = "claude-sonnet-4-6";
 
 // ── Shared blocks injected into planner prompts ───────────────────────────────
 

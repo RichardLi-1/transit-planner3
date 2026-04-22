@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useBackboard } from "~/app/_components/useBackboard";
+import { useAnthropic } from "~/app/_components/useAnthropic";
 import type { Route } from "~/app/map/transit-data";
 
 function buildSystemPrompt(routes: Route[]): string {
@@ -31,7 +31,7 @@ interface Props {
 
 export function TransitAssistant({ routes }: Props) {
   const systemPrompt = buildSystemPrompt(routes);
-  const { messages, isLoading, error, sendMessageStreaming } = useBackboard(systemPrompt);
+  const { messages, isLoading, error, sendMessageStreaming } = useAnthropic(systemPrompt);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

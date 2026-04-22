@@ -40,7 +40,7 @@ The AI council can be triggered from the route panel once a route is drawn or ge
 | Styling | Tailwind CSS 4 |
 | Mapping | Mapbox GL, Mapbox GL Draw |
 | 3D | Three.js / React Three Fiber |
-| AI Platform | Backboard.io (Claude Haiku 4.5 & Sonnet 4.5) |
+| AI Platform | Anthropic Claude (Haiku 4.5 & Sonnet 4.5) |
 | Auth | NextAuth.js v5 |
 | Database | PostgreSQL (multiple instances), Supabase (PostGIS) |
 | Python Backend | FastAPI, SQLAlchemy, Alembic |
@@ -67,7 +67,7 @@ The AI council can be triggered from the route panel once a route is drawn or ge
 - Node.js 20+
 - Python 3.12+
 - A [Mapbox account](https://account.mapbox.com) (free tier works)
-- A [Backboard.io account](https://app.backboard.io) for AI features
+- An [Anthropic API key](https://console.anthropic.com) for AI features
 - A [Supabase project](https://supabase.com) with PostGIS enabled (for population/traffic layers)
 
 ### Setup
@@ -126,8 +126,8 @@ Create a `.env` file at the repo root from `.env.example`:
 # Mapbox — required for map rendering
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.ey...
 
-# Backboard.io — required for AI council and route generation
-BACKBOARD_API_KEY=espr_...
+# Anthropic — required for AI council and route generation
+ANTHROPIC_API_KEY=sk-ant-...
 
 # Supabase — required for population heatmap and traffic layers
 SUPABASE_URL=https://your-project.supabase.co
@@ -149,7 +149,7 @@ DATABASE_URL_WEB=postgresql://postgres:postgres@localhost:5436/genghis
 
 **Where to get keys:**
 - **Mapbox**: [account.mapbox.com](https://account.mapbox.com) → Tokens
-- **Backboard**: [app.backboard.io](https://app.backboard.io) → API Keys
+- **Anthropic**: [console.anthropic.com](https://console.anthropic.com) → API Keys
 - **Supabase**: [supabase.com](https://supabase.com) → Project Settings → API
 
 ## Project Structure
@@ -162,7 +162,7 @@ transit-planner/
 │       │   ├── map/            # Main map page
 │       │   ├── api/            # API routes (AI, auth, data)
 │       │   └── _components/    # UI components
-│       └── server/             # Server-side clients (Backboard, Supabase, etc.)
+│       └── server/             # Server-side clients (Anthropic, Supabase, etc.)
 ├── python_server/              # FastAPI backend
 │   └── api/
 │       ├── main.py             # App entrypoint & CORS
@@ -181,8 +181,8 @@ transit-planner/
 
 | Route | Purpose |
 |---|---|
-| `POST /api/backboard/chat` | Stream AI assistant responses (SSE) |
-| `POST /api/backboard/station-summary` | AI summary for a station |
+| `POST /api/ai/chat` | Stream AI assistant responses (SSE) |
+| `POST /api/ai/station-summary` | AI summary for a station |
 | `POST /api/council` | Trigger multi-agent council deliberation |
 | `GET /api/traffic` | Traffic data from Supabase |
 | `POST /api/ridership/station` | Station-level boardings |

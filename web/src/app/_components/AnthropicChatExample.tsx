@@ -1,17 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useBackboard } from "./useBackboard";
+import { useAnthropic } from "./useAnthropic";
 
-/**
- * Example component demonstrating Backboard.io integration
- * This shows how to use custom prompts and interact with the AI
- */
-export function BackboardChatExample() {
+export function AnthropicChatExample() {
   const [input, setInput] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const { messages, isLoading, error, sendMessage, sendMessageStreaming, reset } =
-    useBackboard(customPrompt || undefined);
+    useAnthropic(customPrompt || undefined);
 
   const [streamingText, setStreamingText] = useState("");
 
@@ -25,13 +21,13 @@ export function BackboardChatExample() {
     if (!input.trim()) return;
     setInput("");
     setStreamingText("");
-    
+
     await sendMessageStreaming(input, {
       onChunk: (chunk) => {
         setStreamingText((prev) => prev + chunk);
       },
     });
-    
+
     setStreamingText("");
   };
 
@@ -39,10 +35,9 @@ export function BackboardChatExample() {
     <div className="mx-auto max-w-2xl space-y-4 p-4">
       <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-stone-900">
-          Backboard.io Chat
+          Anthropic Chat
         </h2>
 
-        {/* Custom System Prompt */}
         <div className="mb-4">
           <label className="mb-2 block text-sm font-medium text-stone-700">
             Custom System Prompt (optional)
@@ -56,7 +51,6 @@ export function BackboardChatExample() {
           />
         </div>
 
-        {/* Messages */}
         <div className="mb-4 max-h-96 space-y-2 overflow-y-auto rounded-md border border-stone-200 bg-stone-50 p-4">
           {messages.length === 0 ? (
             <p className="text-center text-sm text-stone-500">
@@ -89,14 +83,12 @@ export function BackboardChatExample() {
           )}
         </div>
 
-        {/* Error Display */}
         {error && (
           <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
             Error: {error}
           </div>
         )}
 
-        {/* Input */}
         <div className="flex gap-2">
           <input
             type="text"
@@ -135,11 +127,10 @@ export function BackboardChatExample() {
         </div>
       </div>
 
-      {/* Usage Instructions */}
       <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700">
         <h3 className="mb-2 font-semibold">Usage:</h3>
-        <ul className="space-y-1 list-disc pl-5">
-          <li>Enter a custom system prompt to change the AI's behavior</li>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Enter a custom system prompt to change the AI&apos;s behavior</li>
           <li>Click "Send" for a complete response</li>
           <li>Click "Stream" to see the response in real-time</li>
           <li>Click "Reset" to start a new conversation</li>

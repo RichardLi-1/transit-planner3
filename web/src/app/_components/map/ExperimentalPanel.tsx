@@ -1,7 +1,7 @@
 // IDEAS TO IMPLEMENT NEXT (experimental):
 // - Demographic overlay (age, income, car ownership from StatsCan open data)
 // - GTFS-RT live vehicle positions (poll /gotransit/realtime, render moving dots)
-// - Station 3D viz with AI-generated streetview renders (Backboard image API)
+// - Station 3D viz with AI-generated streetview renders
 // - Property acquisition cost estimator (MPAC / land value lookup)
 // - Noise contour modeling (Lden dB rings based on speed, frequency, track type)
 // - Interoperability scoring (how well new lines connect to existing hubs)

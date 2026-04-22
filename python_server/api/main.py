@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 
-from .backboard import SYSTEM_PROMPT, create_assistant, create_thread, stream_message
+from .anthropic import SYSTEM_PROMPT, create_assistant, create_thread, stream_message
 from .council import run_council
 
 

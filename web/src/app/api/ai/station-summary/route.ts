@@ -3,26 +3,10 @@ import {
   createAssistant,
   createThread,
   sendMessage,
-} from "~/server/backboard";
+} from "~/server/anthropic";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/backboard/station-summary
- * Generate an AI summary for a transit station
- *
- * Request body:
- * {
- *   "stationName": string,
- *   "routeName": string,
- *   "ridership"?: number,           // Optional: daily ridership
- *   "connections": string[],        // Connected routes
- *   "allStations"?: Array<{         // Optional: all stations for comparison
- *     name: string,
- *     ridership?: number
- *   }>
- * }
- */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
@@ -50,7 +34,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the analysis prompt
     const prompt = buildStationAnalysisPrompt(
       stationName,
       routeName,
@@ -60,8 +43,7 @@ export async function POST(request: NextRequest) {
       allStations,
     );
 
-    // Create assistant with specialized prompt for station analysis
-    const systemPrompt = `You are a Toronto Transit Commission (TTC) station analyst. 
+    const systemPrompt = `You are a Toronto Transit Commission (TTC) station analyst.
 Your role is to provide concise, data-driven insights about transit stations.
 
 Guidelines:
@@ -77,7 +59,12 @@ Guidelines:
       systemPrompt,
     );
     const threadId = await createThread(assistantId);
-    const response = await sendMessage(threadId, prompt, "claude-haiku-4-5-20251001", 200);
+    const response = await sendMessage(
+      threadId,
+      prompt,
+      "claude-haiku-4-5-20251001",
+      200,
+    );
 
     return NextResponse.json({
       summary: response,
@@ -104,30 +91,29 @@ function buildStationAnalysisPrompt(
   connections: string[] = [],
   allStations: Array<{ name: string; ridership?: number }> = [],
 ): string {
-  const lines: string[] = [
-    `Analyze ${stationName} station on ${routeName}.`,
-  ];
+  const lines: string[] = [`Analyze ${stationName} station on ${routeName}.`];
 
   if (populationServed !== undefined) {
-    lines.push(`Population served (nearest-station Voronoi assignment, 5km cutoff): ${populationServed.toLocaleString()} people.`);
+    lines.push(
+      `Population served (nearest-station Voronoi assignment, 5km cutoff): ${populationServed.toLocaleString()} people.`,
+    );
   }
 
   if (ridership !== undefined) {
     lines.push(`Estimated daily ridership: ${ridership.toLocaleString()} passengers.`);
-    
-    // Calculate comparisons if we have other station data
+
     if (allStations.length > 0) {
-      const stationsWithRidership = allStations.filter(s => s.ridership !== undefined);
+      const stationsWithRidership = allStations.filter((s) => s.ridership !== undefined);
       if (stationsWithRidership.length > 1) {
-        const allRidershipValues = stationsWithRidership.map(s => s.ridership!);
-        const avgRidership = allRidershipValues.reduce((a, b) => a + b, 0) / allRidershipValues.length;
+        const allRidershipValues = stationsWithRidership.map((s) => s.ridership!);
+        const avgRidership =
+          allRidershipValues.reduce((a, b) => a + b, 0) / allRidershipValues.length;
         const maxRidership = Math.max(...allRidershipValues);
         const minRidership = Math.min(...allRidershipValues);
-        
+
         lines.push(`Network average: ${Math.round(avgRidership).toLocaleString()} passengers.`);
         lines.push(`Network range: ${minRidership.toLocaleString()} to ${maxRidership.toLocaleString()}.`);
-        
-        // Find percentile
+
         const sorted = [...allRidershipValues].sort((a, b) => a - b);
         const position = sorted.indexOf(ridership);
         const percentile = Math.round((position / sorted.length) * 100);

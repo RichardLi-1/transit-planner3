@@ -3,25 +3,21 @@
 import { useState, useCallback } from "react";
 import { trackEvent } from "~/lib/analytics";
 
-export type BackboardMessage = {
+export type AnthropicMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-export type BackboardState = {
+export type AnthropicState = {
   assistantId: string | null;
   threadId: string | null;
-  messages: BackboardMessage[];
+  messages: AnthropicMessage[];
   isLoading: boolean;
   error: string | null;
 };
 
-/**
- * React hook for interacting with the Backboard API
- * Provides methods to send messages and manage conversation state
- */
-export function useBackboard(customSystemPrompt?: string) {
-  const [state, setState] = useState<BackboardState>({
+export function useAnthropic(customSystemPrompt?: string) {
+  const [state, setState] = useState<AnthropicState>({
     assistantId: null,
     threadId: null,
     messages: [],
@@ -29,9 +25,6 @@ export function useBackboard(customSystemPrompt?: string) {
     error: null,
   });
 
-  /**
-   * Send a message and get a streaming response
-   */
   const sendMessageStreaming = useCallback(
     async (
       message: string,
@@ -49,15 +42,16 @@ export function useBackboard(customSystemPrompt?: string) {
       }));
 
       try {
-        trackEvent("Backboard Message Sent", {
+        trackEvent("AI Message Sent", {
           message_length: message.length,
           has_custom_system_prompt: Boolean(customSystemPrompt),
           max_tokens: options?.maxTokens,
           model: options?.model,
           streaming: true,
+          provider: "anthropic",
         });
 
-        const response = await fetch("/api/backboard/chat", {
+        const response = await fetch("/api/ai/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -114,7 +108,6 @@ export function useBackboard(customSystemPrompt?: string) {
                 throw new Error(parsed.error);
               }
             } catch (e) {
-              // Ignore JSON parse errors for non-JSON lines
               if (e instanceof SyntaxError) continue;
               throw e;
             }
@@ -132,20 +125,22 @@ export function useBackboard(customSystemPrompt?: string) {
           isLoading: false,
         }));
 
-        trackEvent("Backboard Response Received", {
+        trackEvent("AI Response Received", {
           message_length: message.length,
           response_length: assistantMessage.length,
           streaming: true,
+          provider: "anthropic",
         });
 
         return assistantMessage;
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
-        trackEvent("Backboard Response Failed", {
+        trackEvent("AI Response Failed", {
           message_length: message.length,
           error: errorMessage,
           streaming: true,
+          provider: "anthropic",
         });
         setState((prev) => ({
           ...prev,
@@ -158,9 +153,6 @@ export function useBackboard(customSystemPrompt?: string) {
     [state.assistantId, state.threadId, customSystemPrompt],
   );
 
-  /**
-   * Send a message and get a complete response (non-streaming)
-   */
   const sendMessage = useCallback(
     async (
       message: string,
@@ -177,15 +169,16 @@ export function useBackboard(customSystemPrompt?: string) {
       }));
 
       try {
-        trackEvent("Backboard Message Sent", {
+        trackEvent("AI Message Sent", {
           message_length: message.length,
           has_custom_system_prompt: Boolean(customSystemPrompt),
           max_tokens: options?.maxTokens,
           model: options?.model,
           streaming: false,
+          provider: "anthropic",
         });
 
-        const response = await fetch("/api/backboard/message", {
+        const response = await fetch("/api/ai/message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -219,20 +212,22 @@ export function useBackboard(customSystemPrompt?: string) {
           isLoading: false,
         }));
 
-        trackEvent("Backboard Response Received", {
+        trackEvent("AI Response Received", {
           message_length: message.length,
           response_length: data.response.length,
           streaming: false,
+          provider: "anthropic",
         });
 
         return data.response;
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
-        trackEvent("Backboard Response Failed", {
+        trackEvent("AI Response Failed", {
           message_length: message.length,
           error: errorMessage,
           streaming: false,
+          provider: "anthropic",
         });
         setState((prev) => ({
           ...prev,
@@ -245,9 +240,6 @@ export function useBackboard(customSystemPrompt?: string) {
     [state.assistantId, state.threadId, customSystemPrompt],
   );
 
-  /**
-   * Reset the conversation
-   */
   const reset = useCallback(() => {
     setState({
       assistantId: null,

@@ -828,7 +828,7 @@ export function TransitMap() {
       `\nReturn ONLY this JSON (no markdown, no extra text):\n{"description":"<2 sentences about route purpose>","cost":"<e.g. $2.1B>","timeline":"<e.g. 8 years>","costedTimeline":"<e.g. 2034>","minutesSaved":<number>,"dollarsSaved":"<e.g. $4.2M/yr>","percentageChance":<0-100>,"prNightmareScore":<0-10>}`,
     ].filter(Boolean).join("\n");
 
-    // Defaults in case Backboard call fails
+    // Defaults in case the Anthropic call fails
     let description = `Connects ${stopList}`;
     let stats: GeneratedRoute["stats"] = {
       cost: "$1.8B", timeline: "7 years", costedTimeline: "2033",
@@ -836,7 +836,7 @@ export function TransitMap() {
     };
 
     try {
-      const res = await fetch("/api/backboard/message", {
+      const res = await fetch("/api/ai/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

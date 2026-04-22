@@ -43,7 +43,7 @@ export function useStationSummary() {
       setError(null);
 
       try {
-        const response = await fetch("/api/backboard/station-summary", {
+        const response = await fetch("/api/ai/station-summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),

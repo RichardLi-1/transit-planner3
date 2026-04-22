@@ -198,16 +198,14 @@ ${agentHTML}
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const PANEL_STYLE: React.CSSProperties = {
-  border: "1px solid rgba(190,183,180,0.35)",
-  background: "rgba(255,255,255,0.48)",
-  backdropFilter: "blur(24px)",
-  WebkitBackdropFilter: "blur(24px)",
+  border: "0.93px solid #BEB7B4",
+  background: "#ffffff",
 };
 
 const CARD_STYLE: React.CSSProperties = {
-  background: "rgba(255,255,255,0.93)",
-  border: "1px solid rgba(255,255,255,0.65)",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+  background: "#f9f8f7",
+  border: "1px solid rgba(190,183,180,0.5)",
+  boxShadow: "none",
 };
 
 const MD = {
@@ -225,7 +223,6 @@ const MD = {
 function AgentCard({ state, isActive }: { state: AgentState; isActive: boolean }) {
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Scroll card content to bottom as text streams in
   useEffect(() => {
     if (isActive && contentRef.current) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
@@ -233,37 +230,42 @@ function AgentCard({ state, isActive }: { state: AgentState; isActive: boolean }
   }, [state.text, isActive]);
 
   return (
-    <div className="flex flex-col min-w-0">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isActive ? "animate-pulse" : ""}`} style={{ background: state.color }} />
-        <span className="text-[11px] font-semibold text-stone-700 truncate">{state.agent}</span>
+    <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+      {/* Circular avatar with agent initial */}
+      <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: state.color, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>{state.agent[0]}</span>
       </div>
-      <div
-        ref={contentRef}
-        className="flex-1 rounded-xl rounded-tl-none px-3 py-2 text-[13px] leading-snug text-stone-600 whitespace-pre-wrap overflow-y-auto"
-        style={{ ...CARD_STYLE, borderLeft: `2px solid ${state.color}50`, minHeight: "60px", maxHeight: "180px" }}
-      >
-        {state.text
-          ? <ReactMarkdown components={MD}>{stripBlocks(state.text)}</ReactMarkdown>
-          : <span className="text-stone-300 italic">{isActive ? "thinking…" : "waiting"}</span>
-        }
-        {isActive && !state.done && (
-          <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-stone-400 align-middle" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+          <span style={{ fontSize: 10, color: state.color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{state.agent}</span>
+          {isActive && <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: state.color, display: "inline-block" }} />}
+        </div>
+        <div
+          ref={contentRef}
+          className="text-[12.5px] leading-snug text-stone-600"
+          style={{ background: "#f5f4f2", border: `1.5px solid ${state.color}22`, borderLeft: `2px solid ${state.color}60`, borderRadius: "0 10px 10px 10px", padding: "7px 11px", minHeight: 40, maxHeight: 160, overflowY: "auto" }}
+        >
+          {state.text
+            ? <ReactMarkdown components={MD}>{stripBlocks(state.text)}</ReactMarkdown>
+            : <span className="text-stone-300 italic">{isActive ? "thinking…" : "waiting"}</span>
+          }
+          {isActive && !state.done && (
+            <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-stone-400 align-middle" />
+          )}
+        </div>
+        {state.quote && (
+          <div style={{ marginTop: 5, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontStyle: "italic", lineHeight: 1.5, background: `${state.color}10`, color: state.color, borderLeft: `2px solid ${state.color}55` }}>
+            "{state.quote}"
+          </div>
+        )}
+        {state.done && state.route && (
+          <div className="flex items-center gap-1.5 text-[11px]" style={{ marginTop: 5, borderRadius: 8, padding: "5px 10px", ...CARD_STYLE }}>
+            <span style={{ height: 6, width: 12, borderRadius: 99, backgroundColor: state.route.color, flexShrink: 0, display: "inline-block" }} />
+            <span className="font-medium text-stone-700 truncate">{state.route.name}</span>
+            <span className="ml-auto text-stone-400 shrink-0">{state.route.stops.length}s</span>
+          </div>
         )}
       </div>
-      {state.quote && (
-        <div className="mt-1 rounded-lg px-2.5 py-1 text-[11px] italic leading-snug"
-          style={{ background: `${state.color}12`, color: state.color, borderLeft: `2px solid ${state.color}55` }}>
-          "{state.quote}"
-        </div>
-      )}
-      {state.done && state.route && (
-        <div className="mt-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px]" style={CARD_STYLE}>
-          <span className="h-1.5 w-3 rounded-full shrink-0" style={{ background: state.route.color }} />
-          <span className="font-medium text-stone-700 truncate">{state.route.name}</span>
-          <span className="ml-auto text-stone-400 shrink-0">{state.route.stops.length}s</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -275,36 +277,24 @@ function SessionDetail({ session }: { session: Session }) {
   const commission = session.agentStates["Planning Commission"];
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
       {session.statusMessages.length > 0 && (
-        <div className="px-4 pt-3 pb-1">
+        <div style={{ padding: "12px 16px 4px" }}>
           {session.statusMessages.slice(0, 2).map((s, i) => (
-            <p key={i} className="text-center text-[11px] text-stone-400 italic">{s}</p>
+            <p key={i} style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{s}</p>
           ))}
         </div>
       )}
       {topAgents.length > 0 && (
-        <div className="grid gap-2.5 px-4 pt-2" style={{ gridTemplateColumns: `repeat(${Math.min(topAgents.length, 3)}, 1fr)` }}>
+        <div style={{ padding: "8px 16px 0" }}>
           {topAgents.map((name) => (
             <AgentCard key={name} state={session.agentStates[name]!} isActive={false} />
           ))}
         </div>
       )}
       {commission && (
-        <div className="px-4 pt-2.5">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: commission.color }} />
-            <span className="text-[11px] font-semibold text-stone-700">{commission.agent}</span>
-            <span className="text-[10px] text-stone-400 ml-1">{commission.role}</span>
-          </div>
-          <div
-            className="rounded-xl rounded-tl-none px-3 py-2 text-[13px] leading-snug text-stone-600 whitespace-pre-wrap overflow-y-auto mb-2.5"
-            style={{ ...CARD_STYLE, borderLeft: `2px solid ${commission.color}50`, maxHeight: "100px" }}
-          >
-            {commission.text
-              ? <ReactMarkdown components={MD}>{stripBlocks(commission.text)}</ReactMarkdown>
-              : <span className="text-stone-300 italic">—</span>}
-          </div>
+        <div style={{ padding: "0 16px" }}>
+          <AgentCard state={commission} isActive={false} />
         </div>
       )}
       {session.finalRoute && (
@@ -728,8 +718,9 @@ export function ChatPanel({
     <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
       style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
       {resizeHandle}
+
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-stone-200/40 px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between border-b border-stone-200/60 px-4 py-3 shrink-0">
         <div>
           <p className="text-sm font-semibold text-stone-800">Transit Council</p>
           <p className="text-xs text-stone-400">{streaming ? "Deliberation in progress…" : "Deliberation complete"}</p>
@@ -738,7 +729,7 @@ export function ChatPanel({
         <div className="flex items-center gap-2">
           {sessions.length > 0 && (
             <button onClick={() => setView("history")}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-stone-500 hover:brightness-95 transition-all"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100 transition-all"
               style={CARD_STYLE}>
               <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 2"/>
@@ -754,9 +745,9 @@ export function ChatPanel({
 
       {/* Requirements chips */}
       {(neighbourhoodNames.length > 0 || stationNames.length > 0) && (
-        <div className="flex flex-wrap gap-1 border-b border-stone-200/30 px-4 py-2 shrink-0">
-          {neighbourhoodNames.map((n) => <span key={n} className="rounded-full bg-indigo-50/80 px-2 py-0.5 text-[11px] font-medium text-indigo-600">{n}</span>)}
-          {stationNames.map((s) => <span key={s} className="rounded-full bg-white/70 border border-stone-200/50 px-2 py-0.5 text-[11px] font-medium text-stone-500">{s}</span>)}
+        <div className="flex flex-wrap gap-1 border-b border-stone-200/40 px-4 py-2 shrink-0">
+          {neighbourhoodNames.map((n) => <span key={n} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 border border-indigo-100">{n}</span>)}
+          {stationNames.map((s) => <span key={s} className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px] font-medium text-stone-500">{s}</span>)}
         </div>
       )}
 
@@ -767,12 +758,12 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Scrollable content — always sticks to bottom */}
+      {/* Scrollable content */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
 
-        {/* Agent grid — max 3 columns, wraps to 2 rows for 4-5 agents */}
+        {/* Agent list — vertical */}
         {topAgents.length > 0 && (
-          <div className="grid gap-2.5 px-4 pt-3" style={{ gridTemplateColumns: `repeat(${Math.min(topAgents.length, 3)}, 1fr)` }}>
+          <div className="px-4 pt-3">
             {topAgents.map((name) => (
               <AgentCard key={name} state={agentStates[name]!} isActive={activeAgent === name} />
             ))}
@@ -791,7 +782,7 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* Commission: pulse while running */}
+        {/* Commission pulse indicator */}
         {streaming && !finalRoute && topAgents.length > 0 && topAgents.every((n) => agentStates[n]?.done) && (
           <div className="px-4 pt-3 pb-1">
             <div className="flex items-center gap-2">
@@ -807,16 +798,23 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* Proposed routes comparison */}
+        {/* Commission agent card */}
+        {commission && (
+          <div className="px-4">
+            <AgentCard state={commission} isActive={activeAgent === "Planning Commission"} />
+          </div>
+        )}
+
+        {/* Proposed routes */}
         {proposedRoutes.length > 0 && (
-          <div className="px-4 pt-3">
+          <div className="px-4 pt-1 pb-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 mb-1.5">Proposals</p>
             <div className="flex gap-2 flex-wrap">
               {proposedRoutes.map(({ label, route }) => {
                 const isFinal = finalRoute && route.name === finalRoute.name && route.color === finalRoute.color;
                 return (
                   <div key={label} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
-                    style={{ ...CARD_STYLE, opacity: finalRoute && !isFinal ? 0.5 : 1, outline: isFinal ? `1.5px solid #1c1917` : "none" }}>
+                    style={{ ...CARD_STYLE, opacity: finalRoute && !isFinal ? 0.5 : 1, outline: isFinal ? "1.5px solid #1c1917" : "none" }}>
                     <span className="h-1.5 w-3 rounded-full shrink-0" style={{ background: route.color }} />
                     <span className="font-medium text-stone-700">{route.name}</span>
                     <span className="text-stone-400">·</span>

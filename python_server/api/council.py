@@ -19,7 +19,7 @@ import math
 import re
 from typing import Any, AsyncIterator
 
-from .backboard import create_assistant, create_thread, stream_message, stream_message_with_tools, ToolCallEvent
+from .anthropic import create_assistant, create_thread, stream_message, stream_message_with_tools, ToolCallEvent
 from .data_tools import build_data_brief, get_stops_near_point, snap_to_nearest_stop, check_transfer_at_location
 
 # ── Models ─────────────────────────────────────────────────────────────────────
@@ -461,7 +461,7 @@ async def _turn_with_tools(agent: dict, thread_id: str, prompt: str):
             tool_executor=_execute_tool,
             model=agent["model"],
             max_tokens=agent["max_tokens"],
-            system_prompt=agent["system"],  # critical: preserve persona when Backboard created the thread
+            system_prompt=agent["system"],  # preserve the agent persona for the Anthropic thread
         ):
             if isinstance(item, ToolCallEvent):
                 yield _sse({

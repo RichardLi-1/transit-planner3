@@ -21,13 +21,7 @@ const sections = [
 function SidebarNav({ activeSection }: { activeSection: string }) {
   return (
     <nav style={{ position: "sticky", top: 80 }}>
-      <p
-        style={{
-          fontSize: 11.5, fontWeight: 600, color: "#a8a29e",
-          textTransform: "uppercase", letterSpacing: "0.07em",
-          marginBottom: 10,
-        }}
-      >
+      <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
         On this page
       </p>
       {sections.map((s) => {
@@ -41,7 +35,7 @@ function SidebarNav({ activeSection }: { activeSection: string }) {
               padding: "6px 12px",
               borderRadius: 7,
               fontSize: 13.5,
-              fontWeight: active ? 500 : 400,
+              fontWeight: active ? 600 : 400,
               color: active ? "#2563eb" : "#78716c",
               backgroundColor: active ? "#eff6ff" : "transparent",
               textDecoration: "none",
@@ -55,14 +49,18 @@ function SidebarNav({ activeSection }: { activeSection: string }) {
         );
       })}
 
-      <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid #e7e5e4" }}>
-        <p style={{ fontSize: 12, color: "#a8a29e", marginBottom: 10 }}>Also in docs</p>
+      <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid #e8e4dc" }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+          Also in docs
+        </p>
         <Link
           href="/docs/technical"
           style={{
             display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 12px", borderRadius: 8,
-            border: "1px solid #e7e5e4", backgroundColor: "#fafaf9",
+            padding: "9px 12px", borderRadius: 8,
+            border: "1px solid rgba(0,0,0,0.06)",
+            backgroundColor: "#ffffff",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
             textDecoration: "none",
           }}
         >
@@ -81,11 +79,11 @@ function SectionHeading({ id, children }: { id: string; children: React.ReactNod
     <h2
       id={id}
       style={{
-        fontFamily: "Google Sans Display",
-        fontSize: 22, fontWeight: 700, color: "#1c1917",
-        marginBottom: 14, marginTop: 48,
-        scrollMarginTop: 88,
-        paddingTop: 4,
+        fontFamily: "Google Sans Display, Georgia, serif",
+        fontSize: 24, fontWeight: 700, color: "#0f0e17",
+        marginBottom: 16, marginTop: 52,
+        scrollMarginTop: 88, paddingTop: 4,
+        letterSpacing: "-0.02em",
       }}
     >
       {children}
@@ -95,7 +93,7 @@ function SectionHeading({ id, children }: { id: string; children: React.ReactNod
 
 function Prose({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 14.5, color: "#57534e", lineHeight: 1.75, marginBottom: 14 }}>
+    <p style={{ fontSize: 14.5, color: "#57534e", lineHeight: 1.8, marginBottom: 16 }}>
       {children}
     </p>
   );
@@ -103,16 +101,11 @@ function Prose({ children }: { children: React.ReactNode }) {
 
 function BulletList({ items }: { items: (string | React.ReactNode)[] }) {
   return (
-    <ul style={{ paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+    <ul style={{ paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
       {items.map((item, i) => (
-        <li key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <div
-            style={{
-              width: 6, height: 6, borderRadius: "50%",
-              backgroundColor: "#2563eb", marginTop: 8, flexShrink: 0,
-            }}
-          />
-          <span style={{ fontSize: 14.5, color: "#57534e", lineHeight: 1.7 }}>{item}</span>
+        <li key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: "#2563eb", marginTop: 9, flexShrink: 0 }} />
+          <span style={{ fontSize: 14.5, color: "#57534e", lineHeight: 1.75 }}>{item}</span>
         </li>
       ))}
     </ul>
@@ -121,20 +114,16 @@ function BulletList({ items }: { items: (string | React.ReactNode)[] }) {
 
 function Callout({ type, children }: { type: "tip" | "info"; children: React.ReactNode }) {
   const styles = {
-    tip: { bg: "#f0fdf4", border: "#bbf7d0", icon: "💡", label: "Tip", labelColor: "#16a34a" },
-    info: { bg: "#eff6ff", border: "#bfdbfe", icon: "ℹ️", label: "Note", labelColor: "#2563eb" },
+    tip:  { bg: "#f0fdf4", border: "#bbf7d0", label: "Tip",  labelColor: "#16a34a",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" stroke="#16a34a" strokeWidth="2" strokeLinejoin="round"/></svg> },
+    info: { bg: "#eff6ff", border: "#bfdbfe", label: "Note", labelColor: "#2563eb",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#2563eb" strokeWidth="2"/><path d="M12 16v-4M12 8h.01" stroke="#2563eb" strokeWidth="2" strokeLinecap="round"/></svg> },
   };
   const s = styles[type];
   return (
-    <div
-      style={{
-        backgroundColor: s.bg, border: `1px solid ${s.border}`,
-        borderRadius: 10, padding: "14px 16px",
-        marginBottom: 14, display: "flex", gap: 10,
-      }}
-    >
-      <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
-      <p style={{ fontSize: 13.5, color: "#44403c", lineHeight: 1.65, margin: 0 }}>
+    <div style={{ backgroundColor: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 10 }}>
+      <div style={{ flexShrink: 0, marginTop: 2 }}>{s.icon}</div>
+      <p style={{ fontSize: 13.5, color: "#44403c", lineHeight: 1.7, margin: 0 }}>
         <strong style={{ color: s.labelColor }}>{s.label}:</strong>{" "}{children}
       </p>
     </div>
@@ -146,13 +135,7 @@ export default function UserDocsPage() {
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
+      (entries) => { entries.forEach((entry) => { if (entry.isIntersecting) setActiveSection(entry.target.id); }); },
       { rootMargin: "-15% 0px -70% 0px" }
     );
     document.querySelectorAll("h2[id]").forEach((el) => observer.observe(el));
@@ -160,37 +143,39 @@ export default function UserDocsPage() {
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#ffffff" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#f8f7f4" }}>
       <InfoNav />
 
       {/* Page header */}
-      <div
-        style={{
-          borderBottom: "1px solid #e7e5e4",
-          backgroundColor: "#fafaf9",
-          padding: "40px 24px 36px",
-        }}
-      >
+      <div style={{ padding: "48px 24px 40px", borderBottom: "1px solid #e8e4dc" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <Link href="/docs" style={{ fontSize: 13, color: "#a8a29e", textDecoration: "none" }}>Docs</Link>
-            <span style={{ color: "#d6d3d1" }}>/</span>
-            <span style={{ fontSize: 13, color: "#57534e", fontWeight: 500 }}>User Documentation</span>
+          {/* Breadcrumb */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+            <Link href="/docs" style={{ fontSize: 12.5, color: "#a8a29e", textDecoration: "none", fontWeight: 500 }}>Docs</Link>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="#d6d3d1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span style={{ fontSize: 12.5, color: "#57534e", fontWeight: 500 }}>User Guide</span>
           </div>
+
+          {/* Category label */}
+          <p style={{ fontSize: 11.5, fontWeight: 600, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+            For planners
+          </p>
+
           <h1
             style={{
-              fontFamily: "Google Sans Display",
-              fontSize: "clamp(28px, 3.5vw, 40px)",
-              fontWeight: 700, color: "#1c1917",
-              letterSpacing: "-0.02em", marginBottom: 10,
+              fontFamily: "Google Sans Display, Georgia, serif",
+              fontSize: "clamp(28px, 3.5vw, 44px)",
+              fontWeight: 700, color: "#0f0e17",
+              letterSpacing: "-0.025em", marginBottom: 12,
+              lineHeight: 1.1,
             }}
           >
-            User Documentation
+            User Guide
           </h1>
-          <p style={{ fontSize: 15.5, color: "#78716c", maxWidth: 600 }}>
+          <p style={{ fontSize: 15.5, color: "#78716c", maxWidth: 560, lineHeight: 1.65 }}>
             How to sketch routes, edit stops, run the planning council, and export GTFS.
           </p>
-          <p style={{ fontSize: 12, color: "#a8a29e", marginTop: 10 }}>Last updated: {LAST_UPDATED}</p>
+          <p style={{ fontSize: 12, color: "#a8a29e", marginTop: 12 }}>Last updated: {LAST_UPDATED}</p>
         </div>
       </div>
 
@@ -198,21 +183,16 @@ export default function UserDocsPage() {
       <div
         style={{
           maxWidth: 1100, margin: "0 auto",
-          padding: "40px 24px 80px",
+          padding: "44px 24px 80px",
           display: "grid",
           gridTemplateColumns: "200px 1fr",
           gap: 56,
           alignItems: "start",
         }}
       >
-        {/* Sidebar */}
-        <div style={{ display: "block" }}>
-          <SidebarNav activeSection={activeSection} />
-        </div>
+        <SidebarNav activeSection={activeSection} />
 
-        {/* Main content */}
         <article>
-          {/* Overview */}
           <SectionHeading id="overview">Overview</SectionHeading>
           <Prose>
             The main workspace lives at{" "}
@@ -220,13 +200,7 @@ export default function UserDocsPage() {
             . It combines a Mapbox-based editor, a Lines panel for route visibility and management, and optional
             AI-assisted planning tools. All your edits are reflected live on the map.
           </Prose>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 12, marginBottom: 14,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             {[
               { label: "Map editor", color: "#2563eb", bg: "#eff6ff" },
               { label: "Lines panel", color: "#16a34a", bg: "#f0fdf4" },
@@ -237,8 +211,10 @@ export default function UserDocsPage() {
                 key={item.label}
                 style={{
                   padding: "12px 14px", borderRadius: 10,
-                  backgroundColor: item.bg, border: `1px solid ${item.bg}`,
-                  fontSize: 13, fontWeight: 500, color: item.color,
+                  backgroundColor: "#ffffff",
+                  border: `1.5px solid ${item.color}22`,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  fontSize: 13, fontWeight: 600, color: item.color,
                 }}
               >
                 {item.label}
@@ -246,7 +222,6 @@ export default function UserDocsPage() {
             ))}
           </div>
 
-          {/* Map Basics */}
           <SectionHeading id="map-basics">Map Basics</SectionHeading>
           <BulletList items={[
             "Pan and zoom like any standard web map.",
@@ -257,7 +232,6 @@ export default function UserDocsPage() {
             Use scroll-to-zoom on the map canvas. Hold Ctrl/Cmd and drag to rotate or tilt the view.
           </Callout>
 
-          {/* Lines Panel */}
           <SectionHeading id="lines-panel">Lines Panel</SectionHeading>
           <Prose>
             The Lines panel (top-left) groups lines by mode: Subway/LRT, Streetcar, and Bus. Each section can be
@@ -270,7 +244,6 @@ export default function UserDocsPage() {
             "Show/Hide a single route using the eye icon that appears when hovering a route row.",
           ]} />
 
-          {/* Add Stops */}
           <SectionHeading id="add-stops">Add Stops to a Line</SectionHeading>
           <Prose>
             To add stations to an existing or custom line, select it from the Lines panel using the colored pill button
@@ -287,7 +260,6 @@ export default function UserDocsPage() {
             and AI-generated station analysis.
           </Callout>
 
-          {/* Neighbourhood Selection */}
           <SectionHeading id="neighbourhood-selection">Neighbourhood Selection & Boundaries</SectionHeading>
           <BulletList items={[
             "Use Select Neighbourhoods mode to click neighbourhood polygons and build context for planning.",
@@ -296,48 +268,34 @@ export default function UserDocsPage() {
             "Click a neighbourhood to view population density, traffic levels, and employment data.",
           ]} />
 
-          {/* GTFS */}
           <SectionHeading id="gtfs">Import & Export (GTFS)</SectionHeading>
           <Prose>
             Use the Import and Export GTFS buttons (top-right area of the map) to round-trip data between the editor
             and GTFS format.
           </Prose>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {[
-              {
-                label: "Export GTFS",
-                desc: "Generates a GTFS ZIP from your current lines and validates the result before download.",
-                color: "#16a34a", bg: "#f0fdf4",
-              },
-              {
-                label: "Import GTFS",
-                desc: "Loads a GTFS ZIP (or JSON export) and replaces current custom lines and stop edits.",
-                color: "#2563eb", bg: "#eff6ff",
-              },
+              { label: "Export GTFS", desc: "Generates a GTFS ZIP from your current lines and validates the result before download.", color: "#16a34a", border: "#bbf7d0" },
+              { label: "Import GTFS", desc: "Loads a GTFS ZIP (or JSON export) and replaces current custom lines and stop edits.", color: "#2563eb", border: "#bfdbfe" },
             ].map((item) => (
               <div
                 key={item.label}
                 style={{
                   padding: "14px 16px", borderRadius: 10,
-                  backgroundColor: item.bg, border: `1px solid ${item.bg}`,
+                  backgroundColor: "#ffffff",
+                  border: `1px solid ${item.border}`,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                   display: "flex", gap: 12,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 12.5, fontWeight: 600, color: item.color,
-                    backgroundColor: "white", padding: "3px 9px",
-                    borderRadius: 6, flexShrink: 0, alignSelf: "flex-start",
-                  }}
-                >
+                <div style={{ fontSize: 12, fontWeight: 700, color: item.color, flexShrink: 0, alignSelf: "flex-start", marginTop: 2 }}>
                   {item.label}
                 </div>
-                <span style={{ fontSize: 13.5, color: "#57534e", lineHeight: 1.6 }}>{item.desc}</span>
+                <span style={{ fontSize: 13.5, color: "#57534e", lineHeight: 1.65 }}>{item.desc}</span>
               </div>
             ))}
           </div>
 
-          {/* AI Council */}
           <SectionHeading id="ai-council">AI Planning Council</SectionHeading>
           <Prose>
             The council is a structured multi-round discussion between specialized AI agents that propose and critique
@@ -354,11 +312,8 @@ export default function UserDocsPage() {
             for their proposals.
           </Callout>
 
-          {/* Roadmap */}
-          <SectionHeading id="roadmap">Roadmap Items</SectionHeading>
-          <Prose>
-            The following features are currently in active development:
-          </Prose>
+          <SectionHeading id="roadmap">Roadmap</SectionHeading>
+          <Prose>The following features are currently in active development:</Prose>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
               "Accessibility analysis inputs — street network, zones, destinations, demographics",
@@ -369,22 +324,22 @@ export default function UserDocsPage() {
               <div
                 key={i}
                 style={{
-                  display: "flex", gap: 10, alignItems: "flex-start",
-                  padding: "12px 14px", borderRadius: 10,
-                  border: "1px solid #e7e5e4", backgroundColor: "#fafaf9",
+                  display: "flex", gap: 12, alignItems: "flex-start",
+                  padding: "13px 16px", borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  backgroundColor: "#ffffff",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 }}
               >
+                {/* Empty circle — "planned but not done" indicator */}
                 <div
                   style={{
-                    width: 20, height: 20, borderRadius: "50%",
-                    backgroundColor: "#f5f5f4", border: "1.5px solid #d1d5db",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: 1,
+                    width: 18, height: 18, borderRadius: "50%",
+                    border: "1.5px solid #d1d5db",
+                    flexShrink: 0, marginTop: 2,
                   }}
-                >
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: "#d1d5db" }} />
-                </div>
-                <span style={{ fontSize: 13.5, color: "#57534e", lineHeight: 1.6 }}>{item}</span>
+                />
+                <span style={{ fontSize: 13.5, color: "#57534e", lineHeight: 1.65 }}>{item}</span>
               </div>
             ))}
           </div>

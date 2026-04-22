@@ -28,7 +28,6 @@
     "@types/mapbox-gl": "^3.4.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "anthropic": "^0.0.0",
     "gtfs-realtime-bindings": "^1.1.1",
     "jszip": "^3.10.1",
     "mapbox-gl": "^3.19.1",

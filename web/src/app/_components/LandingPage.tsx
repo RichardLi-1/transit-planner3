@@ -213,36 +213,49 @@ export default function LandingPage() {
   });
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-white font-sans">
+    <main className="overflow-x-hidden bg-white font-sans">
 
-      {/* Background overlay image */}
+      {/* ── Globe hero — clipped with rounded bottom corners ─────────────── */}
+      {/* overflow:hidden + border-radius clips the canvas and overlay inside this box */}
       <div
-        className="absolute inset-0 z-0"
+        className="relative"
         style={{
-          backgroundImage: "url('/homepageoverlay.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          opacity: 0.3,
+          minHeight: "100vh",
+          overflow: "hidden",
+          borderRadius: "0 0 48px 48px",
+          backgroundColor: "#ffffff",
+          boxShadow: "0 8px 48px rgba(0,0,0,0.10)",
         }}
-      />
+      >
 
-      {/* 3D globe canvas — full screen, behind everything */}
-      {ready && (
-        <div className="absolute inset-0 z-0">
-          <Canvas
-            camera={{ position: [0, 0, 7], fov: 45 }}
-            gl={{ antialias: true, alpha: true }}
-            style={{ background: "transparent" }}
-          >
-            <Suspense fallback={null}>
-              <Scene isDark={isDark} />
-            </Suspense>
-          </Canvas>
-        </div>
-      )}
+        {/* Background overlay image */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: "url('/homepageoverlay.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: 0.3,
+          }}
+        />
 
-      {/* UI layer */}
-      <div className="relative z-10 flex min-h-screen flex-col">
+        {/* 3D globe canvas */}
+        {ready && (
+          <div className="absolute inset-0 z-0">
+            <Canvas
+              camera={{ position: [0, 0, 7], fov: 45 }}
+              gl={{ antialias: true, alpha: true }}
+              style={{ background: "transparent" }}
+            >
+              <Suspense fallback={null}>
+                <Scene isDark={isDark} />
+              </Suspense>
+            </Canvas>
+          </div>
+        )}
+
+        {/* UI layer */}
+        <div className="relative z-10 flex min-h-screen flex-col">
 
         {/* Hero */}
         <div className="flex flex-1 flex-col items-center justify-center px-6 pb-64">
@@ -291,15 +304,368 @@ export default function LandingPage() {
             <span style={{color: "white", fontWeight: 700}}>→</span>
           </Link>
 
-          <Link
-            href="/about"
-            className="mt-4 text-xs text-stone-400 underline-offset-2 transition-colors hover:text-stone-600 hover:underline"
-            style={{ ...fadeUp("0.45s") }}
-          >
-            Read more
-          </Link>
+          <div className="mt-4 flex items-center gap-4" style={{ ...fadeUp("0.45s") }}>
+            <Link
+              href="/about"
+              className="text-xs text-stone-400 underline-offset-2 transition-colors hover:text-stone-600 hover:underline"
+            >
+              Read more
+            </Link>
+            <span className="text-stone-300" aria-hidden="true">·</span>
+            <a
+              href="https://github.com/evanzyang91/transit-planner"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-stone-400 underline-offset-2 transition-colors hover:text-stone-600 hover:underline"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              GitHub
+            </a>
+          </div>
         </div>
-      </div>
+        </div>{/* end UI layer */}
+      </div>{/* end globe wrapper */}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          Feature sections — cream background, same palette as docs
+          ════════════════════════════════════════════════════════════════════ */}
+      <div style={{ backgroundColor: "#f8f7f4" }}>
+
+        {/* ── 1. AI Council — split layout (mockup left, text right) ───────── */}
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 64px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+
+          {/* Dark mockup card — simulated council chat */}
+          <div style={{ backgroundColor: "#111827", borderRadius: 28, padding: "28px 28px 20px", overflow: "hidden" }}>
+            {/* Window chrome dots */}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 20 }}>
+              {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: c }} />)}
+              <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.3)", marginLeft: 10, fontFamily: "monospace" }}>Council Session</span>
+            </div>
+
+            {/* Agent messages */}
+            {[
+              { name: "Alex Chen", role: "Ridership Planner", color: "#2563eb", text: "Eglinton East needs a direct link — 340k daily commuters are underserved by the current network." },
+              { name: "Jordan Park", role: "Cost Analyst", color: "#16a34a", text: "Cut Brimley and Morningside. Insufficient ROI vs. tunnel cost. Route length adds $2.1B." },
+              { name: "Margaret Thompson", role: "Neighbourhood Rep", color: "#dc2626", text: "Construction at Kingston Road would destroy businesses that have been here for 40 years!" },
+              { name: "Planning Commission", role: "Final Verdict", color: "#818cf8", text: "Approved. Scarborough Town Centre confirmed as terminus. 8 stops adopted." },
+            ].map((agent, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", backgroundColor: agent.color, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>{agent.name[0]}</span>
+                </div>
+                <div style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 10, padding: "8px 12px", flex: 1 }}>
+                  <p style={{ fontSize: 10, color: agent.color, fontWeight: 700, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.06em" }}>{agent.name}</p>
+                  <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.72)", lineHeight: 1.6 }}>{agent.text}</p>
+                </div>
+              </div>
+            ))}
+
+            {/* Route preview strip at bottom */}
+            <div style={{ marginTop: 16, padding: "14px 16px", backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 10, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {["#dc2626","#d97706","#2563eb","#16a34a","#818cf8","#0891b2","#dc2626","#d97706"].map((c,i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: c, border: "1.5px solid rgba(255,255,255,0.2)" }} />
+                    {i < 7 && <div style={{ width: 12, height: 2, backgroundColor: "rgba(255,255,255,0.12)" }} />}
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>Scarborough East Subway · 8 stops</span>
+            </div>
+          </div>
+
+          {/* Text side */}
+          <div>
+            <p style={{ fontSize: 11.5, fontWeight: 700, color: "#3730a3", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>
+              AI Planning Council
+            </p>
+            <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(2rem, 3.5vw, 3.2rem)", fontWeight: 700, color: "#0f0e17", letterSpacing: "-0.03em", lineHeight: 1.08, marginBottom: 24 }}>
+              Six agents.<br />One optimal route.
+            </h2>
+            <p style={{ fontSize: 16, color: "#57534e", lineHeight: 1.8, marginBottom: 36 }}>
+              A transit planner, cost analyst, NIMBY resident, PR director, and planning commission debate every stop — streaming live as they deliberate. The result is a route that's already been stress-tested.
+            </p>
+            <Link href="/map" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 999, backgroundColor: "#0f0e17", color: "#ffffff", fontSize: 15, fontWeight: 600, textDecoration: "none", letterSpacing: "-0.01em" }}>
+              See it in action
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </Link>
+          </div>
+        </section>
+
+        {/* ── 2. Dark "Designed for every planner" card ────────────────────── */}
+        <section style={{ padding: "0 64px 120px", maxWidth: 1280, margin: "0 auto" }}>
+          <div style={{ backgroundColor: "#0f0e17", borderRadius: 32, padding: "80px 72px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 80, alignItems: "start" }}>
+
+            {/* Left: headline + tag pills */}
+            <div>
+              <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(2.8rem, 5vw, 5rem)", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.035em", lineHeight: 1.0, marginBottom: 48 }}>
+                Designed for<br /><span style={{ color: "#818cf8" }}>every planner</span>
+              </h2>
+              {/* 📖 Learn: these pill tags work like the "iPhone / Mac / Windows" pills in the Flow screenshot */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[
+                  { label: "Urban Planners", active: true },
+                  { label: "Infrastructure Teams" },
+                  { label: "Researchers" },
+                  { label: "Students" },
+                  { label: "City Officials" },
+                  { label: "Advocates" },
+                  { label: "Developers" },
+                ].map(({ label, active }) => (
+                  <span key={label} style={{ padding: "8px 18px", borderRadius: 999, fontSize: 13.5, fontWeight: 500, backgroundColor: active ? "#ffffff" : "transparent", color: active ? "#0f0e17" : "rgba(255,255,255,0.55)", border: `1.5px solid ${active ? "#ffffff" : "rgba(255,255,255,0.2)"}` }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Right: description for the active/highlighted tag */}
+            <div style={{ paddingTop: 8 }}>
+              <h3 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.5rem, 2.5vw, 2rem)", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.02em", marginBottom: 16 }}>
+                Transit Planner for Urban Planners
+              </h3>
+              <p style={{ fontSize: 16, color: "rgba(255,255,255,0.58)", lineHeight: 1.8, marginBottom: 36 }}>
+                Sketch corridor concepts directly on a live map of Toronto's transit network. Draw any route, adjust stops, and let the AI council evaluate ridership, cost, and community impact — before you write a single report.
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <Link href="/map" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 24px", borderRadius: 999, backgroundColor: "#ffffff", color: "#0f0e17", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+                  Open app
+                </Link>
+                <Link href="/docs" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 24px", borderRadius: 999, backgroundColor: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 500, textDecoration: "none", border: "1.5px solid rgba(255,255,255,0.2)" }}>
+                  Read docs
+                </Link>
+                <a href="https://github.com/evanzyang91/transit-planner" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 24px", borderRadius: 999, backgroundColor: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 500, textDecoration: "none", border: "1.5px solid rgba(255,255,255,0.2)" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                  GitHub
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 3. Staggered feature blocks ──────────────────────────────────── */}
+        {/* Feature A: Draw any corridor */}
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+          {/* Mockup: simplified route drawing */}
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
+              {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
+            </div>
+            {/* Simulated map grid */}
+            <div style={{ flex: 1, position: "relative", backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "32px 32px" }}>
+              {/* Route lines */}
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} viewBox="0 0 320 220" preserveAspectRatio="none">
+                <polyline points="20,110 80,90 140,100 200,75 260,80 300,70" fill="none" stroke="#2563eb" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="20,160 60,140 100,145 160,130 220,140 300,120" fill="none" stroke="#dc2626" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="60,20 70,60 65,110 70,160 60,200" fill="none" stroke="#16a34a" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                {/* Stop dots on blue line */}
+                {[[20,110],[80,90],[140,100],[200,75],[260,80],[300,70]].map(([x,y],i) => (
+                  <circle key={i} cx={x} cy={y} r={5} fill="#111827" stroke="#2563eb" strokeWidth="2.5" />
+                ))}
+              </svg>
+              {/* New stop being placed */}
+              <div style={{ position: "absolute", top: "35%", left: "62%", width: 14, height: 14, borderRadius: "50%", backgroundColor: "#2563eb", border: "3px solid white", boxShadow: "0 0 0 4px rgba(37,99,235,0.3)" }} />
+            </div>
+          </div>
+
+          <div>
+            <p style={{ fontSize: 11.5, fontWeight: 700, color: "#3730a3", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>Map Editor</p>
+            <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 700, color: "#0f0e17", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}>
+              Draw any<br />corridor.
+            </h2>
+            <p style={{ fontSize: 15.5, color: "#57534e", lineHeight: 1.8 }}>
+              Click to drop stops directly on the live TTC network. Subway, LRT, streetcar — sketch any corridor and watch your route come to life in real time, overlaid on every existing line.
+            </p>
+          </div>
+        </section>
+
+        {/* Feature B: GTFS (reversed — text left, mockup right) */}
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+          <div>
+            <p style={{ fontSize: 11.5, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>GTFS Round-Trip</p>
+            <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 700, color: "#0f0e17", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}>
+              Planning-ready<br />from day one.
+            </h2>
+            <p style={{ fontSize: 15.5, color: "#57534e", lineHeight: 1.8 }}>
+              Export your route as a valid GTFS ZIP — the industry standard for transit data — or import an existing feed to continue editing. Every sketch becomes a deliverable.
+            </p>
+          </div>
+
+          {/* Mockup: GTFS export UI */}
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 20 }}>
+              {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
+            </div>
+            {/* Simulated export dialog */}
+            <div style={{ backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 14, padding: "20px 20px 14px" }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>GTFS Export</p>
+              {[
+                { file: "routes.txt", rows: "1 route", color: "#2563eb" },
+                { file: "stops.txt", rows: "8 stops", color: "#16a34a" },
+                { file: "trips.txt", rows: "14 trips", color: "#d97706" },
+                { file: "stop_times.txt", rows: "112 entries", color: "#7c3aed" },
+                { file: "shapes.txt", rows: "1 shape", color: "#0891b2" },
+              ].map(({ file, rows, color }) => (
+                <div key={file} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: color }} />
+                    <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>{file}</span>
+                  </div>
+                  <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>{rows}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>Validated ✓</span>
+                <div style={{ backgroundColor: "#16a34a", color: "white", fontSize: 12, fontWeight: 600, padding: "6px 16px", borderRadius: 999 }}>Download ZIP</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Feature C: Population data */}
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 120px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+          {/* Mockup: population heatmap over stops */}
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", position: "relative", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
+              {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
+            </div>
+            {/* Simulated heatmap blobs */}
+            <div style={{ position: "relative", flex: 1, height: "calc(100% - 48px)", backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "28px 28px" }}>
+              {[
+                { x: "22%", y: "30%", size: 90, opacity: 0.35, color: "#dc2626" },
+                { x: "55%", y: "45%", size: 120, opacity: 0.4, color: "#dc2626" },
+                { x: "75%", y: "25%", size: 70, opacity: 0.25, color: "#d97706" },
+                { x: "38%", y: "65%", size: 80, opacity: 0.3, color: "#d97706" },
+                { x: "68%", y: "70%", size: 60, opacity: 0.2, color: "#2563eb" },
+              ].map((blob, i) => (
+                <div key={i} style={{ position: "absolute", left: blob.x, top: blob.y, width: blob.size, height: blob.size, borderRadius: "50%", backgroundColor: blob.color, opacity: blob.opacity, filter: "blur(22px)", transform: "translate(-50%,-50%)" }} />
+              ))}
+              {/* Stat pill */}
+              <div style={{ position: "absolute", top: "18%", right: "8%", backgroundColor: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)", borderRadius: 10, padding: "8px 14px", border: "1px solid rgba(255,255,255,0.1)" }}>
+                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginBottom: 2 }}>Est. catchment</p>
+                <p style={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}>124,800</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p style={{ fontSize: 11.5, fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>Population Data</p>
+            <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 700, color: "#0f0e17", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}>
+              Every stop has a<br />catchment score.
+            </h2>
+            <p style={{ fontSize: 15.5, color: "#57534e", lineHeight: 1.8 }}>
+              Population density and neighbourhood data are baked in. Each station shows an estimated catchment and the council uses it automatically — no spreadsheets required.
+            </p>
+          </div>
+        </section>
+
+        {/* ── 4. "Design the next line" — cinematic CTA before footer ────── */}
+        <section
+          style={{
+            position: "relative",
+            minHeight: "80vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            borderRadius: 40,
+            margin: "0 48px",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              backgroundImage: "url('/transit-night.png')",
+              backgroundSize: "cover",
+              backgroundPosition: "center 40%",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.55) 100%)",
+            }}
+          />
+          <div
+            style={{
+              position: "relative", zIndex: 1,
+              textAlign: "center",
+              padding: "100px 24px 120px",
+              maxWidth: 960,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: '"Google Sans Display", Georgia, serif',
+                fontSize: "clamp(3.5rem, 10vw, 8.5rem)",
+                fontWeight: 700,
+                color: "#ffffff",
+                lineHeight: 0.95,
+                letterSpacing: "-0.035em",
+                marginBottom: 48,
+              }}
+            >
+              Design the<br />next line.
+            </h2>
+            <Link
+              href="/map"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "18px 36px",
+                borderRadius: 999,
+                backgroundColor: "#ffffff",
+                color: "#0f0e17",
+                fontSize: 17,
+                fontWeight: 600,
+                textDecoration: "none",
+                letterSpacing: "-0.01em",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
+              }}
+            >
+              Start planning
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </div>
+        </section>
+
+        {/* ── 5. Footer — large brand text + links ─────────────────────────── */}
+        <footer style={{ borderTop: "1px solid #e8e4dc", padding: "72px 64px 48px" }}>
+          <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+            {/* Links row */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 40, marginBottom: 96 }}>
+              {[
+                { heading: "Product", links: [{ label: "Open App", href: "/map" }, { label: "About", href: "/about" }, { label: "Docs", href: "/docs" }] },
+                { heading: "Resources", links: [{ label: "User Guide", href: "/docs/user" }, { label: "Technical Docs", href: "/docs/technical" }, { label: "Terms of Use", href: "/terms" }] },
+                { heading: "Legal", links: [{ label: "Privacy Policy", href: "/privacy" }, { label: "Terms", href: "/terms" }] },
+              ].map(col => (
+                <div key={col.heading}>
+                  <p style={{ fontSize: 11.5, fontWeight: 700, color: "#a8a29e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>{col.heading}</p>
+                  {col.links.map(link => (
+                    <Link key={link.href} href={link.href} style={{ display: "block", fontSize: 14, color: "#57534e", textDecoration: "none", marginBottom: 10 }}>{link.label}</Link>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Large brand name — like the Flow footer */}
+            <div style={{ overflow: "hidden" }}>
+              <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(5rem, 15vw, 14rem)", fontWeight: 700, color: "#0f0e17", letterSpacing: "-0.04em", lineHeight: 0.88, margin: "0 -4px" }}>
+                Transit Planner
+              </h2>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 32, paddingTop: 24, borderTop: "1px solid #e8e4dc" }}>
+              <p style={{ fontSize: 12.5, color: "#a8a29e" }}>© Transit Planner 2026</p>
+              <p style={{ fontSize: 12.5, color: "#a8a29e" }}>Built at Hack Canada 2026</p>
+            </div>
+          </div>
+        </footer>
+
+      </div>{/* end cream feature wrapper */}
     </main>
   );
 }

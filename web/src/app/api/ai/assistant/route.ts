@@ -1,23 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAssistant, DEFAULT_SYSTEM_PROMPT } from "~/server/backboard";
+import { createAssistant, DEFAULT_SYSTEM_PROMPT } from "~/server/anthropic";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/backboard/assistant
- * Create a new Backboard assistant with a custom prompt
- *
- * Request body:
- * {
- *   "name": string,              // Assistant name
- *   "systemPrompt"?: string      // Optional: custom system prompt (defaults to transit planner prompt)
- * }
- *
- * Returns:
- * {
- *   "assistantId": string        // The created assistant ID
- * }
- */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
@@ -35,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ assistantId });
   } catch (error) {
-    console.error("Backboard API error:", error);
+    console.error("Anthropic API error:", error);
     return NextResponse.json(
       {
         error:
