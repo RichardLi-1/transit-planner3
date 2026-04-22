@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { trackEvent } from "~/lib/analytics";
 
 export type BackboardMessage = {
   role: "user" | "assistant";
@@ -48,6 +49,14 @@ export function useBackboard(customSystemPrompt?: string) {
       }));
 
       try {
+        trackEvent("Backboard Message Sent", {
+          message_length: message.length,
+          has_custom_system_prompt: Boolean(customSystemPrompt),
+          max_tokens: options?.maxTokens,
+          model: options?.model,
+          streaming: true,
+        });
+
         const response = await fetch("/api/backboard/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -123,10 +132,21 @@ export function useBackboard(customSystemPrompt?: string) {
           isLoading: false,
         }));
 
+        trackEvent("Backboard Response Received", {
+          message_length: message.length,
+          response_length: assistantMessage.length,
+          streaming: true,
+        });
+
         return assistantMessage;
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
+        trackEvent("Backboard Response Failed", {
+          message_length: message.length,
+          error: errorMessage,
+          streaming: true,
+        });
         setState((prev) => ({
           ...prev,
           isLoading: false,
@@ -157,6 +177,14 @@ export function useBackboard(customSystemPrompt?: string) {
       }));
 
       try {
+        trackEvent("Backboard Message Sent", {
+          message_length: message.length,
+          has_custom_system_prompt: Boolean(customSystemPrompt),
+          max_tokens: options?.maxTokens,
+          model: options?.model,
+          streaming: false,
+        });
+
         const response = await fetch("/api/backboard/message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -191,10 +219,21 @@ export function useBackboard(customSystemPrompt?: string) {
           isLoading: false,
         }));
 
+        trackEvent("Backboard Response Received", {
+          message_length: message.length,
+          response_length: data.response.length,
+          streaming: false,
+        });
+
         return data.response;
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
+        trackEvent("Backboard Response Failed", {
+          message_length: message.length,
+          error: errorMessage,
+          streaming: false,
+        });
         setState((prev) => ({
           ...prev,
           isLoading: false,

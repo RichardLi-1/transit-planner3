@@ -11,6 +11,7 @@ import { haversineKm } from "~/app/map/geo-utils";
 import type { PopRow } from "~/app/map/geo-utils";
 import { ROUTES } from "~/app/map/transit-data";
 import type { Route } from "~/app/map/transit-data";
+import { trackEvent } from "~/lib/analytics";
 
 // 📖 Learn: mode weight — not all transit is equal. A subway stop at 500m is
 // more valuable than a bus stop at 500m because of reliability, speed, capacity.
@@ -182,6 +183,12 @@ export function useTransitDesert(
         },
         firstLabelLayer,
       );
+
+      trackEvent("Transit Desert Computed", {
+        population_points: popRawData.length,
+        total_routes_considered: allRoutes.length,
+        total_stops_considered: allRoutes.reduce((sum, route) => sum + route.stops.length, 0),
+      });
 
       setIsComputing(false);
     }, 0);

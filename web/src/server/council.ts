@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAssistant, createThread, streamMessage } from "./backboard";
+import { createAssistant, createThread, streamMessage } from "./anthropic";
 
 // ── Models ─────────────────────────────────────────────────────────────────────
 

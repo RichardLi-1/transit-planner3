@@ -32,8 +32,18 @@ import { useHeatmap } from "./map/hooks/useHeatmap";
 import { useLiveVehicles } from "./map/hooks/useLiveVehicles";
 import { useTransitDesert } from "./map/hooks/useTransitDesert";
 import { useIsochrone } from "./map/hooks/useIsochrone";
+import { identifyAnalyticsUser, registerAnalyticsSuperProps, trackEvent } from "~/lib/analytics";
 
 type DrawMode = "normal" | "select" | "boundary";
+type RouteMetrics = {
+  total_lines: number;
+  total_stations: number;
+  total_portals: number;
+  custom_lines: number;
+  subway_lines: number;
+  streetcar_lines: number;
+  bus_lines: number;
+};
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
@@ -99,6 +109,30 @@ function circlePolygon(center: [number, number], radiusM: number, steps = 36): [
     const a = (i / steps) * 2 * Math.PI;
     return [center[0] + Math.cos(a) * radiusM * lngPerM, center[1] + Math.sin(a) * radiusM * latPerM] as [number, number];
   });
+}
+
+function getRouteMetrics(routes: Route[]): RouteMetrics {
+  return routes.reduce<RouteMetrics>(
+    (acc, route) => {
+      acc.total_lines += 1;
+      acc.total_stations += route.stops.length;
+      acc.total_portals += route.portals?.length ?? 0;
+      if (route.id.startsWith("custom-")) acc.custom_lines += 1;
+      if (route.type === "subway") acc.subway_lines += 1;
+      if (route.type === "streetcar") acc.streetcar_lines += 1;
+      if (route.type === "bus") acc.bus_lines += 1;
+      return acc;
+    },
+    {
+      total_lines: 0,
+      total_stations: 0,
+      total_portals: 0,
+      custom_lines: 0,
+      subway_lines: 0,
+      streetcar_lines: 0,
+      bus_lines: 0,
+    },
+  );
 }
 
 // ─── shareable URL helpers ───────────────────────────────────────────────────
@@ -283,11 +317,190 @@ export function TransitMap() {
   // Direct callback ref — called synchronously on each SSE event, bypassing React batching
   const onToolCallRef = useRef<(evt: ToolCallEvent) => void>(() => { /* set below */ });
   const councilHasRunRef = useRef(false);
+  const prevRouteMetricsRef = useRef<RouteMetrics>(getRouteMetrics(routes));
+  const routesInitialTrackRef = useRef(true);
+  const heatmapInitialTrackRef = useRef(true);
+  const trafficInitialTrackRef = useRef(true);
+  const canadaPopInitialTrackRef = useRef(true);
+  const liveVehiclesInitialTrackRef = useRef(true);
+  const transitDesertInitialTrackRef = useRef(true);
+  const darkModeInitialTrackRef = useRef(true);
+  const highContrastInitialTrackRef = useRef(true);
+  const imperialInitialTrackRef = useRef(true);
+  const advancedModeInitialTrackRef = useRef(true);
+  const experimentalFeaturesInitialTrackRef = useRef(true);
+  const goTrainInitialTrackRef = useRef(true);
 
 
   useEffect(() => {
     councilHasRunRef.current = councilHasRun;
   }, [councilHasRun]);
+
+  function getAnalyticsContext(routeList: Route[] = routesRef.current) {
+    return {
+      ...getRouteMetrics(routeList),
+      selected_neighbourhoods: selectedNeighbourhoodsRef.current.size,
+      selected_stations: selectedStationsRef.current.size,
+      generated_route_visible: Boolean(generatedRoute),
+    };
+  }
+
+  useEffect(() => {
+    if (!authUser?.sub) return;
+    identifyAnalyticsUser(authUser.sub, {
+      email: authUser.email,
+      name: authUser.name,
+      nickname: authUser.nickname,
+    });
+  }, [authUser]);
+
+  useEffect(() => {
+    const metrics = getRouteMetrics(routes);
+    registerAnalyticsSuperProps(metrics);
+
+    if (routesInitialTrackRef.current) {
+      routesInitialTrackRef.current = false;
+      prevRouteMetricsRef.current = metrics;
+      return;
+    }
+
+    const previous = prevRouteMetricsRef.current;
+    const lineDelta = metrics.total_lines - previous.total_lines;
+    const stationDelta = metrics.total_stations - previous.total_stations;
+    const portalDelta = metrics.total_portals - previous.total_portals;
+
+    if (lineDelta !== 0 || stationDelta !== 0 || portalDelta !== 0) {
+      trackEvent("Network Updated", {
+        ...metrics,
+        line_delta: lineDelta,
+        station_delta: stationDelta,
+        portal_delta: portalDelta,
+      });
+    }
+
+    prevRouteMetricsRef.current = metrics;
+  }, [routes]);
+
+  useEffect(() => {
+    if (heatmapInitialTrackRef.current) {
+      heatmapInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Population Heatmap Toggled", {
+      enabled: showHeatmap,
+      ...getAnalyticsContext(),
+    });
+  }, [showHeatmap]);
+
+  useEffect(() => {
+    if (trafficInitialTrackRef.current) {
+      trafficInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Traffic Overlay Toggled", {
+      enabled: showTraffic,
+      ...getAnalyticsContext(),
+    });
+  }, [showTraffic]);
+
+  useEffect(() => {
+    if (canadaPopInitialTrackRef.current) {
+      canadaPopInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Canada Population Overlay Toggled", {
+      enabled: showCanadaPop,
+      ...getAnalyticsContext(),
+    });
+  }, [showCanadaPop]);
+
+  useEffect(() => {
+    if (liveVehiclesInitialTrackRef.current) {
+      liveVehiclesInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Live Vehicles Toggled", {
+      enabled: showLiveVehicles,
+      ...getAnalyticsContext(),
+    });
+  }, [showLiveVehicles]);
+
+  useEffect(() => {
+    if (transitDesertInitialTrackRef.current) {
+      transitDesertInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Transit Desert Toggled", {
+      enabled: showTransitDesert,
+      ...getAnalyticsContext(),
+    });
+  }, [showTransitDesert]);
+
+  useEffect(() => {
+    if (darkModeInitialTrackRef.current) {
+      darkModeInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Dark Mode Toggled", {
+      enabled: darkMode,
+      ...getAnalyticsContext(),
+    });
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (highContrastInitialTrackRef.current) {
+      highContrastInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("High Contrast Toggled", {
+      enabled: highContrast,
+      ...getAnalyticsContext(),
+    });
+  }, [highContrast]);
+
+  useEffect(() => {
+    if (imperialInitialTrackRef.current) {
+      imperialInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Imperial Units Toggled", {
+      enabled: imperial,
+      ...getAnalyticsContext(),
+    });
+  }, [imperial]);
+
+  useEffect(() => {
+    if (advancedModeInitialTrackRef.current) {
+      advancedModeInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Tools Panel Toggled", {
+      enabled: advancedMode,
+      ...getAnalyticsContext(),
+    });
+  }, [advancedMode]);
+
+  useEffect(() => {
+    if (experimentalFeaturesInitialTrackRef.current) {
+      experimentalFeaturesInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("Experimental Features Toggled", {
+      enabled: experimentalFeatures,
+      ...getAnalyticsContext(),
+    });
+  }, [experimentalFeatures]);
+
+  useEffect(() => {
+    if (goTrainInitialTrackRef.current) {
+      goTrainInitialTrackRef.current = false;
+      return;
+    }
+    trackEvent("GO Transit Toggled", {
+      enabled: showGoTrain,
+      ...getAnalyticsContext(),
+    });
+  }, [showGoTrain]);
 
   useEffect(() => {
     drawModeRef.current = drawMode;
@@ -524,6 +737,12 @@ export function TransitMap() {
 
   async function handleGenerateRoute() {
     if (isGenerating) return;
+    trackEvent("Generated Route Requested", {
+      ...getAnalyticsContext(),
+      selected_neighbourhoods: selectedNeighbourhoodsRef.current.size,
+      selected_stations: selectedStationsRef.current.size,
+      has_boundary: hasBoundary,
+    });
     setIsGenerating(true);
     setGeneratedRoute(null);
     setDisabledStops(new Set());
@@ -562,7 +781,15 @@ export function TransitMap() {
       }
     }
 
-    if (stops.length < 2) { setIsGenerating(false); return; }
+    if (stops.length < 2) {
+      trackEvent("Generated Route Aborted", {
+        ...getAnalyticsContext(),
+        requested_stops: stops.length,
+        reason: "not_enough_points",
+      });
+      setIsGenerating(false);
+      return;
+    }
 
     // Order west → east by longitude so the line flows sensibly
     stops.sort((a, b) => a.coords[0] - b.coords[0]);
@@ -647,6 +874,14 @@ export function TransitMap() {
       servicePattern: { headwayMinutes: 5, startHour: 6, endHour: 23, days: ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] },
       stops,
       stats,
+    });
+    trackEvent("Generated Route Completed", {
+      ...getAnalyticsContext(),
+      generated_stop_count: stops.length,
+      generated_length_km: Number(routeLengthKm.toFixed(2)),
+      minutes_saved: stats.minutesSaved,
+      approval_chance: stats.percentageChance,
+      pr_nightmare_score: stats.prNightmareScore,
     });
     setIsGenerating(false);
     handleClearAll();
@@ -735,12 +970,18 @@ export function TransitMap() {
 
 
   function handleGenerate() {
+    trackEvent("Council Started", {
+      ...getAnalyticsContext(),
+      selected_neighbourhoods: selectedNeighbourhoodsRef.current.size,
+      selected_stations: selectedStationsRef.current.size,
+    });
     setCouncilStartNew(true);
     setCouncilHasRun(true);
     setCouncilOpen(true);
   }
 
   function handleViewCouncil() {
+    trackEvent("Council Viewed", getAnalyticsContext());
     setCouncilStartNew(false);
     setCouncilOpen(true);
   }
@@ -843,6 +1084,7 @@ export function TransitMap() {
   function animateLineDraw(routeId: string, delayMs: number, isBus: boolean, isSc: boolean) {
     const map = mapRef.current;
     if (!map) return;
+    const animMap = map;
     const existing = drawAnimRef.current.get(routeId);
     if (existing !== undefined) cancelAnimationFrame(existing);
 
@@ -859,19 +1101,19 @@ export function TransitMap() {
       const progress = easeOut(t);
       const trim: [number, number] = [progress, 1];
 
-      if (map.getLayer(`route-line-${routeId}`))
-        map.setPaintProperty(`route-line-${routeId}`, "line-trim-offset", trim);
-      if (!isBus && !isSc && map.getLayer(`route-outline-${routeId}`))
-        map.setPaintProperty(`route-outline-${routeId}`, "line-trim-offset", trim);
+      if (animMap.getLayer(`route-line-${routeId}`))
+        animMap.setPaintProperty(`route-line-${routeId}`, "line-trim-offset", trim);
+      if (!isBus && !isSc && animMap.getLayer(`route-outline-${routeId}`))
+        animMap.setPaintProperty(`route-outline-${routeId}`, "line-trim-offset", trim);
 
       if (t < 1) {
         drawAnimRef.current.set(routeId, requestAnimationFrame(frame));
       } else {
         drawAnimRef.current.delete(routeId);
-        if (map.getLayer(`route-line-${routeId}`))
-          map.setPaintProperty(`route-line-${routeId}`, "line-trim-offset", [0, 0]);
-        if (!isBus && !isSc && map.getLayer(`route-outline-${routeId}`))
-          map.setPaintProperty(`route-outline-${routeId}`, "line-trim-offset", [0, 0]);
+        if (animMap.getLayer(`route-line-${routeId}`))
+          animMap.setPaintProperty(`route-line-${routeId}`, "line-trim-offset", [0, 0]);
+        if (!isBus && !isSc && animMap.getLayer(`route-outline-${routeId}`))
+          animMap.setPaintProperty(`route-outline-${routeId}`, "line-trim-offset", [0, 0]);
       }
     }
 
@@ -1138,6 +1380,8 @@ export function TransitMap() {
   }
 
   function handleDeleteCustomLine(routeId: string) {
+    const remainingRoutes = routesRef.current.filter((r) => r.id !== routeId);
+    const route = routesRef.current.find((r) => r.id === routeId);
     snapshotHistory();
     // Cancel any in-progress animations for this route
     const windRaf = windingAnimRef.current.get(routeId);
@@ -1155,6 +1399,12 @@ export function TransitMap() {
       });
     }
     setRoutes((prev) => prev.filter((r) => r.id !== routeId));
+    trackEvent("Line Deleted", {
+      ...getAnalyticsContext(remainingRoutes),
+      route_id: routeId,
+      route_name: route?.name,
+      route_type: route?.type,
+    });
     if (addStationToLine === routeId) setAddStationToLine(null);
     if (addPortalToLine === routeId) setAddPortalToLine(null);
     setSelectedRoute(null);
@@ -1162,10 +1412,18 @@ export function TransitMap() {
   }
 
   function handleDeleteStop(stopName: string, routeId: string) {
+    const route = routesRef.current.find((r) => r.id === routeId);
     snapshotHistory();
     setRoutes((prev) =>
       prev.map((r) => r.id === routeId ? { ...r, shape: undefined, stops: r.stops.filter((s) => s.name !== stopName) } : r)
     );
+    trackEvent("Station Deleted", {
+      ...getAnalyticsContext(),
+      route_id: routeId,
+      route_name: route?.name,
+      route_type: route?.type,
+      stop_name: stopName,
+    });
   }
 
   function handleToggleStop(name: string) {
@@ -1748,6 +2006,7 @@ export function TransitMap() {
           const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
           const currentCounter = stopCounterRef.current;
           const tempName = `Station ${currentCounter}`;
+          const routeBeforeAdd = routesRef.current.find((r) => r.id === lineId);
           snapshotHistory();
           stopCounterRef.current = currentCounter + 1;
           setRoutes((prev) => prev.map((r) => {
@@ -1759,8 +2018,16 @@ export function TransitMap() {
             const roadSnapped = r.type === "bus" || r.type === "streetcar";
             return { ...r, stops: newStops, shape: roadSnapped ? r.shape : undefined };
           }));
+          trackEvent("Station Added", {
+            ...getAnalyticsContext(),
+            route_id: lineId,
+            route_name: routeBeforeAdd?.name,
+            route_type: routeBeforeAdd?.type,
+            stop_name: tempName,
+            lng: Number(coords[0].toFixed(5)),
+            lat: Number(coords[1].toFixed(5)),
+          });
           // Auto-snap bus and streetcar routes to roads after each stop placement
-          const routeBeforeAdd = routesRef.current.find((r) => r.id === lineId);
           if ((routeBeforeAdd?.type === "bus" || routeBeforeAdd?.type === "streetcar") && routeBeforeAdd.stops.length >= 1) {
             startShimmerRef.current(lineId);
             triggerAutoSnapRef.current(lineId);
@@ -1779,6 +2046,7 @@ export function TransitMap() {
         const portalLineId = addPortalToLineRef.current;
         if (portalLineId) {
           const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          const route = routesRef.current.find((r) => r.id === portalLineId);
           snapshotHistory();
           setRoutes((prev) => prev.map((r) => {
             if (r.id !== portalLineId) return r;
@@ -1787,6 +2055,14 @@ export function TransitMap() {
             const snapped = shape.length >= 2 ? snapToShape(coords, shape) : coords;
             return { ...r, portals: [...(r.portals ?? []), { coords: snapped }] };
           }));
+          trackEvent("Portal Added", {
+            ...getAnalyticsContext(),
+            route_id: portalLineId,
+            route_name: route?.name,
+            route_type: route?.type,
+            lng: Number(coords[0].toFixed(5)),
+            lat: Number(coords[1].toFixed(5)),
+          });
         }
       });
 
@@ -2282,6 +2558,14 @@ export function TransitMap() {
     onToolCallRef.current = (evt: ToolCallEvent) => {
       const map = mapRef.current;
       if (!map || !mapLoaded) return;
+      const resultCount = Array.isArray(evt.result) ? evt.result.length : evt.result ? 1 : 0;
+      trackEvent("Council Tool Call", {
+        ...getAnalyticsContext(),
+        tool_name: evt.tool,
+        agent: evt.agent,
+        call_status: evt.result === null ? "started" : "completed",
+        result_count: resultCount,
+      });
       const { call_id: id, tool, input, result } = evt;
 
       const SRC = "tool-anim-src";
@@ -2462,6 +2746,7 @@ export function TransitMap() {
     const onMouseUp = () => {
       if (!dragging) return;
       const { name, coords } = dragging;
+      const route = routesRef.current.find((r) => r.id === lineId);
       dragging = null;
       map.dragPan.enable();
       map.getCanvas().style.cursor = "";
@@ -2470,6 +2755,15 @@ export function TransitMap() {
       setRoutes((prev) =>
         prev.map((r) => r.id === lineId ? { ...r, shape: undefined, stops: r.stops.map((s) => s.name === name ? { ...s, coords } : s) } : r)
       );
+      trackEvent("Station Moved", {
+        ...getAnalyticsContext(),
+        route_id: lineId,
+        route_name: route?.name,
+        route_type: route?.type,
+        stop_name: name,
+        lng: Number(coords[0].toFixed(5)),
+        lat: Number(coords[1].toFixed(5)),
+      });
     };
 
     const onEnter = () => { if (!dragging) map.getCanvas().style.cursor = "grab"; };
@@ -2513,6 +2807,7 @@ export function TransitMap() {
 
   function handleExport() {
     void (async () => {
+      trackEvent("GTFS Export Started", getAnalyticsContext(routes));
       setExportProgress(0);
       try {
         const JSZip = (await import("jszip")).default;
@@ -2535,6 +2830,18 @@ export function TransitMap() {
         a.click();
         URL.revokeObjectURL(url);
         setValidationResult({ result, context: "export" });
+        trackEvent("GTFS Export Completed", {
+          ...getAnalyticsContext(routes),
+          valid: result.valid,
+          exported_routes: result.stats.routes,
+          exported_stops: result.stats.stops,
+          exported_trips: result.stats.trips,
+        });
+      } catch (error) {
+        trackEvent("GTFS Export Failed", {
+          ...getAnalyticsContext(routes),
+          error: error instanceof Error ? error.message : "unknown",
+        });
       } finally {
         setExportProgress(null);
       }
@@ -2542,6 +2849,7 @@ export function TransitMap() {
   }
 
   function handleImport() {
+    trackEvent("GTFS Import Picker Opened", getAnalyticsContext());
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".zip,.json,application/zip,application/json";
@@ -2566,6 +2874,11 @@ export function TransitMap() {
 
   function confirmImport(file: File, merge: boolean) {
     setPendingImportFile(null);
+    trackEvent("GTFS Import Started", {
+      ...getAnalyticsContext(),
+      file_name: file.name,
+      merge,
+    });
 
     if (!merge) {
       // Replace: remove all existing custom line layers/sources from the map before replacing state
@@ -2573,10 +2886,22 @@ export function TransitMap() {
     }
 
     const applyRoutes = (incoming: Route[]) => {
+      const incomingIds = new Set(incoming.map((r) => r.id));
+      const nextRoutes = merge
+        ? [...routes.filter((r) => !incomingIds.has(r.id)), ...incoming]
+        : incoming;
+
+      trackEvent("GTFS Import Completed", {
+        ...getAnalyticsContext(nextRoutes),
+        file_name: file.name,
+        merge,
+        imported_routes: incoming.length,
+        imported_stations: incoming.reduce((sum, route) => sum + route.stops.length, 0),
+      });
+
       if (merge) {
         setRoutes((prev) => {
           // Imported routes win on ID conflict; remove stale map layers for replaced IDs
-          const incomingIds = new Set(incoming.map((r) => r.id));
           for (const r of prev) {
             if (incomingIds.has(r.id)) removeCustomLineFromMap(r.id);
           }
@@ -2625,6 +2950,12 @@ export function TransitMap() {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Unknown error while importing GTFS.";
+          trackEvent("GTFS Import Failed", {
+            ...getAnalyticsContext(),
+            file_name: file.name,
+            merge,
+            error: msg,
+          });
           setImportError(msg);
         }
       })();
@@ -2638,6 +2969,12 @@ export function TransitMap() {
           };
           applyRoutes(parsed.routes ?? parsed.customLines ?? []);
         } catch {
+          trackEvent("GTFS Import Failed", {
+            ...getAnalyticsContext(),
+            file_name: file.name,
+            merge,
+            error: "json_parse_failed",
+          });
           setImportError("Could not parse the JSON file. Make sure it was exported from this app.");
         }
       };
@@ -3402,6 +3739,14 @@ export function TransitMap() {
             stops: parsed.stops,
           };
           setRoutes((prev) => [...prev, newCustomLine]);
+          trackEvent("Council Route Added", {
+            ...getAnalyticsContext([...routesRef.current, newCustomLine]),
+            route_id: id,
+            route_name: parsed.name,
+            route_type: parsed.type,
+            station_count: parsed.stops.length,
+            pr_score: parsed.prScore,
+          });
           // Also set generatedRoute for the stats panel
           setGeneratedRoute({
             id,
@@ -3897,6 +4242,15 @@ export function TransitMap() {
               stops: [],
             };
             setRoutes((prev) => [...prev, newRoute]);
+            trackEvent("Line Created", {
+              ...getAnalyticsContext([...routesRef.current, newRoute]),
+              route_id: id,
+              route_name: name,
+              route_type: type,
+              short_name: shortName,
+              color,
+              creation_source: "manual",
+            });
             handleSetDrawMode("normal");
             setAddStationToLine(id);
             setShowNewLineModal(false);

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 // LngLatBounds constructor, so we import the real module here.
 import mapboxgl from "mapbox-gl";
 import type { RefObject } from "react";
+import { trackEvent } from "~/lib/analytics";
 
 // 📖 Learn: LngLatBounds — Mapbox's helper for tracking a lat/lng bounding box.
 // .extend() expands the box to include a new point; .isEmpty() checks if any points were added.
@@ -109,6 +110,11 @@ export function useOverlay(mapRef: RefObject<mapboxgl.Map | null>, mapLoaded: bo
           }
           setCustomOverlay(geojson);
           setCustomOverlayName(file.name);
+          trackEvent("Overlay Imported", {
+            file_name: file.name,
+            file_type: ext,
+            feature_count: geojson.features.length,
+          });
         } catch (err) {
           console.error("[overlay] parse error", err);
           alert(`Could not load overlay: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -122,10 +128,16 @@ export function useOverlay(mapRef: RefObject<mapboxgl.Map | null>, mapLoaded: bo
     customOverlay,
     customOverlayName,
     handleOverlayImport,
-    clearOverlay: () => {setCustomOverlay(null); setCustomOverlayName("");}
+    clearOverlay: () => {
+      trackEvent("Overlay Cleared", {
+        overlay_name: customOverlayName || null,
+        had_overlay: Boolean(customOverlay),
+      });
+      setCustomOverlay(null);
+      setCustomOverlayName("");
+    }
   }
 
 }
-
 
 

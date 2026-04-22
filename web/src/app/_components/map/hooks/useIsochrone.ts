@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import type { RefObject } from 'react';
+import { trackEvent } from "~/lib/analytics";
 
 
 export function useIsochrone(
@@ -43,6 +44,13 @@ export function useIsochrone(
         const [lng, lat] = isochroneOrigin;
         const mins = [15, 30, 45, 60].filter((m) => m <= isochroneMinutes);
         const url = `https://api.mapbox.com/isochrone/v1/mapbox/${isoMode}/${lng},${lat}?contours_minutes=${mins.join(",")}&polygons=true&access_token=${TOKEN}`;
+        trackEvent("Isochrone Requested", {
+          mode: isoMode,
+          minutes: isochroneMinutes,
+          contour_count: mins.length,
+          origin_lng: Number(lng.toFixed(5)),
+          origin_lat: Number(lat.toFixed(5)),
+        });
         fetch(url)
             .then((r) => r.json())
             .then((geojson) => {
@@ -59,8 +67,20 @@ export function useIsochrone(
                 map.addLayer({ id: `isochrone-fill-${m}`, type: "fill", source: SRC, filter: ["==", ["get", "contour"], m], paint: { "fill-color": colors[m] ?? "#888", "fill-opacity": 0.12 } }, beforeId);
             });
             map.addLayer({ id: "isochrone-outline", type: "line", source: SRC, paint: { "line-color": ["get", "color"], "line-width": 1.5, "line-opacity": 0.6 } }, beforeId);
+            trackEvent("Isochrone Completed", {
+              mode: isoMode,
+              minutes: isochroneMinutes,
+              contour_count: mins.length,
+            });
             })
-            .catch((e) => console.warn("[isochrone] fetch failed", e));
+            .catch((e) => {
+              trackEvent("Isochrone Failed", {
+                mode: isoMode,
+                minutes: isochroneMinutes,
+                error: e instanceof Error ? e.message : "unknown",
+              });
+              console.warn("[isochrone] fetch failed", e);
+            });
         return cleanup;
     }, [isochroneOrigin, isochroneMinutes, isoMode, mapLoaded]);
 
