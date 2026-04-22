@@ -140,7 +140,7 @@ const AGENTS: Agent[] = [
   { key: "nimby",      name: "Margaret Thompson",   role: "Neighbourhood Rep",      color: "#dc2626", system: NIMBY_SYSTEM,      model: HAIKU,  maxTokens: 300 },
   { key: "pr",         name: "Devon Walsh",         role: "PR Director",            color: "#d97706", system: PR_SYSTEM,         model: HAIKU,  maxTokens: 300 },
   { key: "rebuttal",   name: "Alex & Jordan",       role: "Joint Rebuttal",         color: "#7c3aed", system: REBUTTAL_SYSTEM,   model: SONNET, maxTokens: 700 },
-  { key: "commission", name: "Planning Commission", role: "Final Decision",         color: "#0f172a", system: COMMISSION_SYSTEM, model: SONNET, maxTokens: 800 },
+  { key: "commission", name: "Planning Commission", role: "Final Decision",         color: "#64748b", system: COMMISSION_SYSTEM, model: SONNET, maxTokens: 2000 },
 ];
 
 // ── SSE / extraction helpers ───────────────────────────────────────────────────
