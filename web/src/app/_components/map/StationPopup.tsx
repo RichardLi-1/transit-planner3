@@ -14,6 +14,7 @@ export function StationPopup({
   onDelete,
   onAddTransfer,
   onRemoveTransfer,
+  onRename,
 }: {
   popup: { name: string; routeId: string; x: number; y: number; coords?: [number, number] };
   allRoutes: Route[];
@@ -24,6 +25,7 @@ export function StationPopup({
   onDelete: () => void;
   onAddTransfer: (targetRouteId: string) => void;
   onRemoveTransfer: (targetRouteId: string) => void;
+  onRename?: (newName: string) => void;
 }) {
   const currentRoute = allRoutes.find((r) => r.id === popup.routeId);
   const connectedIds = new Set(connectedRoutes.map((r) => r.id));
@@ -36,6 +38,30 @@ export function StationPopup({
   // Estimate ridership as ~15% of population served
   const ridership = populationServed !== undefined ? Math.round(populationServed * 0.15) : undefined;
   
+  // Inline rename state
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  function startRename() {
+    setRenameValue(popup.name);
+    setIsRenaming(true);
+  }
+
+  function commitRename() {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== popup.name) onRename?.(trimmed);
+    setIsRenaming(false);
+  }
+
+  function cancelRename() {
+    setIsRenaming(false);
+  }
+
+  useEffect(() => {
+    if (isRenaming) renameInputRef.current?.select();
+  }, [isRenaming]);
+
   // AI Summary hook
   const { getSummary, isLoading: isSummaryLoading, getCachedSummary } = useStationSummary();
   const [summary, setSummary] = useState<string>("");
@@ -105,7 +131,30 @@ export function StationPopup({
             className="h-2.5 w-5 shrink-0 rounded-full"
             style={{ background: currentRoute?.color ?? "#94a3b8" }}
           />
-          <span className="truncate text-sm font-semibold text-stone-800">{popup.name}</span>
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+              }}
+              className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-1 py-0 text-sm font-semibold text-stone-800 outline-none focus:border-stone-500"
+            />
+          ) : (
+            <button
+              onClick={startRename}
+              title="Click to rename"
+              className="group flex min-w-0 items-center gap-1 truncate text-left"
+            >
+              <span className="truncate text-sm font-semibold text-stone-800">{popup.name}</span>
+              <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 shrink-0 text-stone-300 opacity-0 transition-opacity group-hover:opacity-100" fill="currentColor">
+                <path d="M8.5 1.5a1.5 1.5 0 0 1 2.12 2.12L9.5 4.75 7.25 2.5l1.25-1Zm-1.5 1.5L1 9v2h2l6-6.25-1.75-1.75-.25-.25Z"/>
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isDeletable && (

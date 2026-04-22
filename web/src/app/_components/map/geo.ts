@@ -88,13 +88,25 @@ export function routeToGeoJSON(route: Route): GeoJSON.Feature<GeoJSON.LineString
 }
 
 export function stopsToGeoJSON(route: Route): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  const stops = route.stops;
   return {
     type: "FeatureCollection",
-    features: route.stops.map((s) => ({
-      type: "Feature",
-      properties: { name: s.name, routeId: route.id, color: route.color },
-      geometry: { type: "Point", coordinates: s.coords },
-    })),
+    features: stops.map((s, i) => {
+      // Compute average direction vector from neighbouring stops
+      const prev = i > 0 ? stops[i - 1]!.coords : null;
+      const next = i < stops.length - 1 ? stops[i + 1]!.coords : null;
+      let dx = 0, dy = 0;
+      if (prev) { dx += s.coords[0] - prev[0]; dy += s.coords[1] - prev[1]; }
+      if (next) { dx += next[0] - s.coords[0]; dy += next[1] - s.coords[1]; }
+      // 📖 Learn: longitude diff (dx) maps to screen horizontal; latitude diff (dy) maps to screen vertical.
+      // If the line is more vertical (|dy| > |dx|), put the label to the right instead of below.
+      const labelAnchor = (prev || next) && Math.abs(dy) > Math.abs(dx) ? "left" : "top";
+      return {
+        type: "Feature",
+        properties: { name: s.name, routeId: route.id, color: route.color, labelAnchor },
+        geometry: { type: "Point", coordinates: s.coords },
+      };
+    }),
   };
 }
 

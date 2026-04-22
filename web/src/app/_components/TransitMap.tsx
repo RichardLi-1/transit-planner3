@@ -171,7 +171,7 @@ export function TransitMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [selectedStop, setSelectedStop] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -195,6 +195,8 @@ export function TransitMap() {
     ...ROUTES.filter((r) => r.type === "streetcar"),
     ...ROUTES.filter((r) => r.type !== "bus" && r.type !== "streetcar"),
   ]);
+  // Derive selectedRoute from routes so any mutation (rename, delete stop, etc.) is reflected automatically
+  const selectedRoute = routes.find((r) => r.id === selectedRouteId) ?? null;
   const [importError, setImportError] = useState<string | null>(null);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [exportProgress, setExportProgress] = useState<number | null>(null);
@@ -263,6 +265,7 @@ export function TransitMap() {
   const measureModeRef = useRef(false);
   const measurePtsRef = useRef<[number, number][]>([]);
   const [showGameMode, setShowGameMode] = useState(false);
+  const [showStationLabels, setShowStationLabels] = useState(false);
   const [snapProgress, setSnapProgress] = useState<{ routeId: string; pct: number } | null>(null);
   const snapDebounceRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const goShapesRef = useRef<Map<string, [number, number][]>>(new Map());
@@ -647,6 +650,7 @@ export function TransitMap() {
     const stored = localStorage.getItem("darkMode");
     setDarkMode(stored !== null ? stored === "1" : window.matchMedia("(prefers-color-scheme: dark)").matches);
     setHighContrast(get("highContrast"));
+    setShowStationLabels(get("t_showStationLabels"));
 
     // Follow OS theme changes in real time when no manual preference is stored
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -672,6 +676,21 @@ export function TransitMap() {
   }, [imperial]);
   useEffect(() => { localStorage.setItem("t_showCoverageZones", showCoverageZones ? "1" : "0"); }, [showCoverageZones]);
   useEffect(() => { localStorage.setItem("t_showServiceHeatmap", showServiceHeatmap ? "1" : "0"); }, [showServiceHeatmap]);
+  useEffect(() => { localStorage.setItem("t_showStationLabels", showStationLabels ? "1" : "0"); }, [showStationLabels]);
+
+  // Toggle station label visibility on all routes + bus stops when the setting changes.
+  // Label layers start hidden ("none") and are shown/hidden here rather than add/remove —
+  // cheaper, and avoids needing to know exact layer insertion order.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const vis = showStationLabels ? "visible" : "none";
+    for (const route of routes) {
+      const layerId = `stops-label-${route.id}`;
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", vis);
+    }
+    if (map.getLayer("bus-stops-label")) map.setLayoutProperty("bus-stops-label", "visibility", vis);
+  }, [showStationLabels, routes, mapLoaded]);
 
   // Simulation — dim inactive routes on map
   useEffect(() => {
@@ -702,7 +721,7 @@ export function TransitMap() {
       const map = mapRef.current;
       if (map) {
         GO_TRAIN_ROUTES.forEach((r) => {
-          [`route-shadow-${r.id}`, `route-outline-${r.id}`, `route-line-${r.id}`, `route-shimmer-${r.id}`, `stops-ring-${r.id}`, `stops-selected-${r.id}`, `stops-dot-${r.id}`, `underground-line-${r.id}`, `portals-dot-${r.id}`]
+          [`route-shadow-${r.id}`, `route-outline-${r.id}`, `route-line-${r.id}`, `route-shimmer-${r.id}`, `stops-ring-${r.id}`, `stops-selected-${r.id}`, `stops-dot-${r.id}`, `stops-label-${r.id}`, `underground-line-${r.id}`, `portals-dot-${r.id}`]
             .forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
           [`route-${r.id}`, `stops-${r.id}`, `underground-${r.id}`, `portals-${r.id}`]
             .forEach((id) => { if (map.getSource(id)) map.removeSource(id); });
@@ -1392,7 +1411,7 @@ export function TransitMap() {
     stopShimmer(routeId);
     const map = mapRef.current;
     if (map) {
-      [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `route-shimmer-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
+      [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `route-shimmer-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `stops-label-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       [`route-${routeId}`, `stops-${routeId}`, `underground-${routeId}`, `portals-${routeId}`].forEach((id) => {
@@ -1408,7 +1427,7 @@ export function TransitMap() {
     });
     if (addStationToLine === routeId) setAddStationToLine(null);
     if (addPortalToLine === routeId) setAddPortalToLine(null);
-    setSelectedRoute(null);
+    setSelectedRouteId(null);
     setSelectedStop(null);
   }
 
@@ -1917,6 +1936,28 @@ export function TransitMap() {
         },
       });
 
+      map.addLayer({
+        id: "bus-stops-label",
+        type: "symbol",
+        source: "bus-stops-source",
+        filter: busFilter,
+        minzoom: 14,
+        layout: {
+          "text-field": ["get", "name"] as unknown as string,
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+          "text-size": 8,
+          "text-offset": [0, 1],
+          "text-anchor": "top",
+          "text-optional": true,
+          "visibility": "none",
+        },
+        paint: {
+          "text-color": ["get", "color"] as unknown as string,
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.5,
+        },
+      });
+
       // Click handler on shared bus stop dot layer
       map.on("click", "bus-stops-dot", (e) => {
         if (didDragStopRef.current) { didDragStopRef.current = false; return; }
@@ -1937,7 +1978,7 @@ export function TransitMap() {
         if (!busRoute) return;
         const { x, y } = e.point;
         setStationPopup({ name, routeId, x, y, coords: [e.lngLat.lng, e.lngLat.lat] });
-        setSelectedRoute(busRoute);
+        setSelectedRouteId(busRoute.id);
         setSelectedStop(name);
       });
 
@@ -1947,7 +1988,7 @@ export function TransitMap() {
       map.on("click", "bus-line-layer", (e) => {
         const routeId = e.features?.[0]?.properties?.routeId as string | undefined;
         const busRoute = BUS_ROUTES.find((r) => r.id === routeId);
-        if (busRoute) { setSelectedRoute(busRoute); setSelectedStop(null); }
+        if (busRoute) { setSelectedRouteId(busRoute.id); setSelectedStop(null); }
       });
 
       let hoveredBusFeatureId: number | string | null = null;
@@ -2186,7 +2227,7 @@ export function TransitMap() {
       const isHidden  = hiddenRoutes.has(route.id);
       if (wasHidden === isHidden) continue;
       const vis = isHidden ? "none" : "visible";
-      for (const layerId of [`route-shadow-${route.id}`, `route-outline-${route.id}`, `route-line-${route.id}`, `stops-ring-${route.id}`, `stops-selected-${route.id}`, `stops-dot-${route.id}`]) {
+      for (const layerId of [`route-shadow-${route.id}`, `route-outline-${route.id}`, `route-line-${route.id}`, `stops-ring-${route.id}`, `stops-selected-${route.id}`, `stops-dot-${route.id}`, `stops-label-${route.id}`]) {
         if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", vis);
       }
     }
@@ -2437,7 +2478,7 @@ export function TransitMap() {
       },
     });
 
-    map.on("click", "generated-route-line", () => setSelectedRoute(null));
+    map.on("click", "generated-route-line", () => setSelectedRouteId(null));
 
     map.on("click", "generated-stops-dot", (e) => {
       const name = e.features?.[0]?.properties?.name as string | undefined;
@@ -2674,13 +2715,21 @@ export function TransitMap() {
 	      map.addLayer({ id: `stops-ring-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 2 : sc ? 3.5 : 6, "circle-color": route.color, "circle-opacity": 0.25, "circle-stroke-width": 0 } });
 	      map.addLayer({ id: `stops-selected-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: 9, filter: ["==", ["get", "name"], "__none__"], paint: { "circle-radius": bus ? 3.5 : sc ? 5 : 9, "circle-color": route.color, "circle-opacity": 0.5, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2, "circle-stroke-color": "#ffffff" } });
 	      map.addLayer({ id: `stops-dot-${route.id}`, type: "circle", source: `stops-${route.id}`, minzoom: sc ? 12 : 11, paint: { "circle-radius": bus ? 1.5 : sc ? 2 : 3.5, "circle-color": "#ffffff", "circle-stroke-color": route.color, "circle-stroke-width": bus ? 1 : sc ? 1.5 : 2 } });
+      // 📖 Learn: Mapbox "data expressions" let each feature drive layout properties using ["get", "prop"].
+      // text-anchor "left" places the left edge of the text at the dot → text appears to the right.
+      // text-anchor "top" places the top edge at the dot → text appears below.
+      const yOff = bus ? 1 : sc ? 1.2 : 1.5;
+      map.addLayer({ id: `stops-label-${route.id}`, type: "symbol", source: `stops-${route.id}`, minzoom: bus ? 14 : sc ? 12 : 11, layout: { "text-field": ["get", "name"] as unknown as string, "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"], "text-size": bus ? 8 : sc ? 9 : 11, "text-anchor": ["get", "labelAnchor"] as unknown as "top", "text-offset": ["case", ["==", ["get", "labelAnchor"], "left"], ["literal", [0.6, 0]], ["literal", [0, yOff]]] as unknown as [number, number], "text-optional": true, "visibility": "none" }, paint: { "text-color": route.color, "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
+      // Correct label visibility immediately — the visibility effect runs before this effect
+      // (earlier declaration order), so it can't set visibility on layers that don't exist yet.
+      if (showStationLabels) map.setLayoutProperty(`stops-label-${route.id}`, "visibility", "visible");
       // Underground tunnel overlay
       map.addSource(`underground-${route.id}`, { type: "geojson", data: undergroundToGeoJSON(route) });
       map.addLayer({ id: `underground-line-${route.id}`, type: "line", source: `underground-${route.id}`, layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#1e1e2e", "line-width": bus ? 1.5 : sc ? 3 : 7, "line-opacity": 0.55, "line-dasharray": [2, 2] } });
       // Portal markers
       map.addSource(`portals-${route.id}`, { type: "geojson", data: portalsToGeoJSON(route) });
       map.addLayer({ id: `portals-dot-${route.id}`, type: "circle", source: `portals-${route.id}`, paint: { "circle-radius": 5, "circle-color": "#1e1e2e", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5, "circle-opacity": 0.8 } });
-	      map.on("click", `route-line-${route.id}`, () => { const cur = routesRef.current.find(r => r.id === route.id) ?? route; setSelectedRoute(cur); setSelectedStop(null); });
+	      map.on("click", `route-line-${route.id}`, () => { setSelectedRouteId(route.id); setSelectedStop(null); });
 	      map.on("mouseenter", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 3 : sc ? 5 : 10); });
 	      map.on("mouseleave", `route-line-${route.id}`, () => { map.getCanvas().style.cursor = ""; map.setPaintProperty(`route-line-${route.id}`, "line-width", bus ? 1.5 : sc ? 3 : 7); });
 	      map.on("click", `stops-dot-${route.id}`, (e) => {
@@ -2697,7 +2746,7 @@ export function TransitMap() {
           return;
         }
         setStationPopup({ name, routeId: route.id, x: e.point.x, y: e.point.y, coords: [e.lngLat.lng, e.lngLat.lat] });
-        setSelectedRoute(routesRef.current.find(r => r.id === route.id) ?? route);
+        setSelectedRouteId(route.id);
         setSelectedStop(name);
       });
       map.on("mouseenter", `stops-dot-${route.id}`, () => { map.getCanvas().style.cursor = "pointer"; });
@@ -2865,7 +2914,7 @@ export function TransitMap() {
   function removeCustomLineFromMap(routeId: string) {
     const map = mapRef.current;
     if (!map) return;
-    [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
+    [`route-shadow-${routeId}`, `route-outline-${routeId}`, `route-line-${routeId}`, `stops-ring-${routeId}`, `stops-selected-${routeId}`, `stops-dot-${routeId}`, `stops-label-${routeId}`, `underground-line-${routeId}`, `portals-dot-${routeId}`].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
     });
     [`route-${routeId}`, `stops-${routeId}`, `underground-${routeId}`, `portals-${routeId}`].forEach((id) => {
@@ -3131,7 +3180,7 @@ export function TransitMap() {
 	              <div className="mt-1 border-t border-stone-100 pt-2">
 	                <li
 	                  className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900 list-none"
-	                  onClick={() => setSelectedRoute(null)}
+	                  onClick={() => setSelectedRouteId(null)}
 	                >
 	                  <span className="h-2 w-4 shrink-0 rounded-full" style={{ background: generatedRoute.color }} />
 	                  <span className="truncate">{generatedRoute.name}</span>
@@ -3277,7 +3326,7 @@ export function TransitMap() {
                   if (showGoTrain) {
                     const map = mapRef.current;
                     if (map) GO_TRAIN_ROUTES.forEach((r) => {
-                      [`route-shadow-${r.id}`, `route-outline-${r.id}`, `route-line-${r.id}`, `route-shimmer-${r.id}`, `stops-ring-${r.id}`, `stops-selected-${r.id}`, `stops-dot-${r.id}`, `underground-line-${r.id}`, `portals-dot-${r.id}`].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+                      [`route-shadow-${r.id}`, `route-outline-${r.id}`, `route-line-${r.id}`, `route-shimmer-${r.id}`, `stops-ring-${r.id}`, `stops-selected-${r.id}`, `stops-dot-${r.id}`, `stops-label-${r.id}`, `underground-line-${r.id}`, `portals-dot-${r.id}`].forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
                       [`route-${r.id}`, `stops-${r.id}`, `underground-${r.id}`, `portals-${r.id}`].forEach((id) => { if (map.getSource(id)) map.removeSource(id); });
                     });
                     setShowGoTrain(false);
@@ -3563,7 +3612,7 @@ export function TransitMap() {
             onAddPortal={routes.some((r) => r.id === selectedRoute.id)
               ? () => { setAddPortalToLine(selectedRoute.id); addPortalToLineRef.current = selectedRoute.id; }
               : undefined}
-            onClose={() => { setSelectedRoute(null); setSelectedStop(null); }}
+            onClose={() => { setSelectedRouteId(null); setSelectedStop(null); }}
             allRoutes={routes}
           />
         ) : showGeneratedPanel ? (
@@ -3669,6 +3718,16 @@ export function TransitMap() {
           }}
           onClose={() => setStationPopup(null)}
           onDelete={() => { handleDeleteStop(stationPopup.name, stationPopup.routeId); setStationPopup(null); }}
+          onRename={(newName) => {
+            const oldName = stationPopup.name;
+            snapshotHistory();
+            setRoutes((prev) => prev.map((r) => ({
+              ...r,
+              stops: r.stops.map((s) => s.name === oldName ? { ...s, name: newName } : s),
+            })));
+            setSelectedStop((s) => s === oldName ? newName : s);
+            setStationPopup((p) => p ? { ...p, name: newName } : p);
+          }}
           onAddTransfer={(targetRouteId) => {
             const { name, coords } = stationPopup;
             // Add this station to the target route's stops (terminus-aware)
@@ -3923,6 +3982,7 @@ export function TransitMap() {
       setCanadaPopLoading(false);
     }
   }, "amber", true] as const,
+                  ["Station labels", showStationLabels, () => setShowStationLabels((v) => !v), "stone", false] as const,
                   ["Coverage zones", showCoverageZones, () => setShowCoverageZones((v) => !v), "sky", false] as const,
                   ["Service heatmap", showServiceHeatmap, () => setShowServiceHeatmap((v) => !v), "orange", false] as const,
                   ["Live vehicles", showLiveVehicles, () => setShowLiveVehicles((v) => !v), "emerald", false] as const,
