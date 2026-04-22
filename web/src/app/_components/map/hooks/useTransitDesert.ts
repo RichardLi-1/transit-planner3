@@ -13,14 +13,16 @@ import { ROUTES } from "~/app/map/transit-data";
 import type { Route } from "~/app/map/transit-data";
 import { trackEvent } from "~/lib/analytics";
 
-// 📖 Learn: mode weight — not all transit is equal. A subway stop at 500m is
-// more valuable than a bus stop at 500m because of reliability, speed, capacity.
+// 📖 Learn: mode weight — for "desert" assessment, what matters is whether you
+// have ANY transit nearby, not just premium transit. Bus is still real service.
+// We use higher weights than you might for a "quality" score because a transit
+// desert is about access, not speed or comfort.
 const MODE_WEIGHT: Record<string, number> = {
   subway: 1.0,
   lrt: 1.0,
   go_train: 0.9,
-  streetcar: 0.8,
-  bus: 0.5,
+  streetcar: 0.9,
+  bus: 0.85,
 };
 
 function computeDesertScores(
@@ -86,8 +88,12 @@ function computeDesertScores(
     // Beyond that it grows linearly — a 1km walk has penalty 3.5, 2km has 6.0.
     const distancePenalty = 1 + nearestDist / 0.4;
 
-    // frequency_score: perfect service at ≤10min headway = 1.0; hourly bus = 0.17
-    const frequencyScore = Math.min(1, 10 / Math.max(1, nearestHeadway));
+    // frequency_score: 30min headway = 1.0 (adequate bus service); 60min = 0.5.
+    // Using 30 as the baseline (not 10) so regular bus service scores as "good
+    // enough" for desert purposes — the old 10min baseline made every bus route
+    // look nearly as bad as no transit at all, which caused desert severity to
+    // mirror population density everywhere.
+    const frequencyScore = Math.min(1, 30 / Math.max(1, nearestHeadway));
 
     // connectivity_bonus: each additional route within 800m adds 10% (up to 1.5×).
     // A cell with 5 routes is harder to strand than one with only a single bus.

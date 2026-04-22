@@ -197,13 +197,10 @@ ${agentHTML}
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
-const PANEL_STYLE: React.CSSProperties = {
-  border: "0.93px solid #BEB7B4",
-  background: "#ffffff",
-};
+// Visual bg/border are applied as Tailwind classes on each container so dark mode overrides in globals.css apply
+const PANEL_CLASSES = "bg-white dark:bg-[#1c1c1e] border border-[#BEB7B4] dark:border-stone-700";
 
 const CARD_STYLE: React.CSSProperties = {
-  background: "#f9f8f7",
   border: "1px solid rgba(190,183,180,0.5)",
   boxShadow: "none",
 };
@@ -242,8 +239,8 @@ function AgentCard({ state, isActive }: { state: AgentState; isActive: boolean }
         </div>
         <div
           ref={contentRef}
-          className="text-[12.5px] leading-snug text-stone-600"
-          style={{ background: "#f5f4f2", border: `1.5px solid ${state.color}22`, borderLeft: `2px solid ${state.color}60`, borderRadius: "0 10px 10px 10px", padding: "7px 11px", minHeight: 40, maxHeight: 160, overflowY: "auto" }}
+          className="text-[12.5px] leading-snug text-stone-600 bg-stone-100"
+          style={{ border: `1.5px solid ${state.color}22`, borderLeft: `2px solid ${state.color}60`, borderRadius: "0 10px 10px 10px", padding: "7px 11px", minHeight: 40, maxHeight: 160, overflowY: "auto" }}
         >
           {state.text
             ? <ReactMarkdown components={MD}>{stripBlocks(state.text)}</ReactMarkdown>
@@ -259,7 +256,7 @@ function AgentCard({ state, isActive }: { state: AgentState; isActive: boolean }
           </div>
         )}
         {state.done && state.route && (
-          <div className="flex items-center gap-1.5 text-[11px]" style={{ marginTop: 5, borderRadius: 8, padding: "5px 10px", ...CARD_STYLE }}>
+          <div className="flex items-center gap-1.5 text-[11px] bg-stone-50" style={{ marginTop: 5, borderRadius: 8, padding: "5px 10px", ...CARD_STYLE }}>
             <span style={{ height: 6, width: 12, borderRadius: 99, backgroundColor: state.route.color, flexShrink: 0, display: "inline-block" }} />
             <span className="font-medium text-stone-700 truncate">{state.route.name}</span>
             <span className="ml-auto text-stone-400 shrink-0">{state.route.stops.length}s</span>
@@ -281,7 +278,7 @@ function SessionDetail({ session }: { session: Session }) {
       {session.statusMessages.length > 0 && (
         <div style={{ padding: "12px 16px 4px" }}>
           {session.statusMessages.slice(0, 2).map((s, i) => (
-            <p key={i} style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{s}</p>
+            <p key={i} className="text-center text-[11px] text-stone-400 italic">{s}</p>
           ))}
         </div>
       )}
@@ -329,8 +326,8 @@ function FinalRecommendationCard({
   timestamp: Date;
 }) {
   return (
-    <div className="mx-4 mb-4 rounded-xl overflow-hidden"
-      style={{ border: "1.5px solid #1c1917", background: "rgba(255,255,255,0.97)", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+    <div className="mx-4 mb-4 rounded-xl overflow-hidden bg-white border border-stone-800 dark:border-stone-400"
+      style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
       <div className="px-4 pt-3 pb-2.5">
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400">Final Recommendation</p>
         <div className="flex items-center gap-2 mb-1.5">
@@ -637,8 +634,8 @@ export function ChatPanel({
 
   if (view === "history") {
     return (
-      <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
-        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
+      <div className={`pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl ${PANEL_CLASSES}`}
+        style={{ width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
         {resizeHandle}
         <div className="flex items-center gap-2 border-b border-stone-200/40 px-4 py-3">
           <button onClick={() => setView("live")} className="text-stone-400 hover:text-stone-700">
@@ -651,7 +648,7 @@ export function ChatPanel({
           {sessions.length === 0 && <p className="text-center text-sm text-stone-400 py-8">No past sessions yet</p>}
           {[...sessions].reverse().map((s) => (
             <button key={s.id} onClick={() => setView({ sessionId: s.id })}
-              className="w-full text-left rounded-xl px-3.5 py-2.5 transition-colors hover:brightness-95"
+              className="w-full text-left rounded-xl px-3.5 py-2.5 transition-colors hover:brightness-95 bg-stone-50"
               style={{ ...CARD_STYLE, display: "block" }}>
               <div className="flex items-center gap-2 mb-0.5">
                 {s.finalRoute && <span className="h-2 w-4 rounded-full shrink-0" style={{ background: s.finalRoute.color }} />}
@@ -680,8 +677,8 @@ export function ChatPanel({
     const session = sessions.find((s) => s.id === view.sessionId);
     if (!session) { setView("live"); return null; }
     return (
-      <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
-        style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
+      <div className={`pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl ${PANEL_CLASSES}`}
+        style={{ width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
         {resizeHandle}
         <div className="flex items-center gap-2 border-b border-stone-200/40 px-4 py-3">
           <button onClick={() => setView("history")} className="text-stone-400 hover:text-stone-700">
@@ -715,8 +712,8 @@ export function ChatPanel({
 
   // ── Live view ─────────────────────────────────────────────────────────────────
   return (
-    <div className="pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl"
-      style={{ ...PANEL_STYLE, width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
+    <div className={`pointer-events-auto absolute flex flex-col overflow-hidden rounded-2xl shadow-xl ${PANEL_CLASSES}`}
+      style={{ width: panelSize.width, height: panelSize.height, maxHeight: "calc(100vh - 44px)", bottom: "22px", right: `calc(${rightOffset} + 30px)`, transition: "right 0.3s ease" }}>
       {resizeHandle}
 
       {/* Header */}
@@ -729,7 +726,7 @@ export function ChatPanel({
         <div className="flex items-center gap-2">
           {sessions.length > 0 && (
             <button onClick={() => setView("history")}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100 transition-all"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100 transition-all bg-stone-50"
               style={CARD_STYLE}>
               <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 2"/>
@@ -746,8 +743,8 @@ export function ChatPanel({
       {/* Requirements chips */}
       {(neighbourhoodNames.length > 0 || stationNames.length > 0) && (
         <div className="flex flex-wrap gap-1 border-b border-stone-200/40 px-4 py-2 shrink-0">
-          {neighbourhoodNames.map((n) => <span key={n} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 border border-indigo-100">{n}</span>)}
-          {stationNames.map((s) => <span key={s} className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px] font-medium text-stone-500">{s}</span>)}
+          {neighbourhoodNames.map((n) => <span key={n} className="rounded-full bg-stone-100 px-3 py-0.5 text-[11px] font-medium text-stone-600 border border-stone-200">{n}</span>)}
+          {stationNames.map((s) => <span key={s} className="rounded-full bg-stone-100 border border-stone-200 px-3 py-0.5 text-[11px] font-medium text-stone-500">{s}</span>)}
         </div>
       )}
 

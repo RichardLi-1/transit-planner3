@@ -1953,7 +1953,7 @@ export function TransitMap() {
         },
         paint: {
           "text-color": ["get", "color"] as unknown as string,
-          "text-halo-color": "#ffffff",
+          "text-halo-color": darkMode ? "#111111" : "#ffffff",
           "text-halo-width": 1.5,
         },
       });
@@ -2719,7 +2719,7 @@ export function TransitMap() {
       // text-anchor "left" places the left edge of the text at the dot → text appears to the right.
       // text-anchor "top" places the top edge at the dot → text appears below.
       const yOff = bus ? 1 : sc ? 1.2 : 1.5;
-      map.addLayer({ id: `stops-label-${route.id}`, type: "symbol", source: `stops-${route.id}`, minzoom: bus ? 14 : sc ? 12 : 11, layout: { "text-field": ["get", "name"] as unknown as string, "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"], "text-size": bus ? 8 : sc ? 9 : 11, "text-anchor": ["get", "labelAnchor"] as unknown as "top", "text-offset": ["case", ["==", ["get", "labelAnchor"], "left"], ["literal", [0.6, 0]], ["literal", [0, yOff]]] as unknown as [number, number], "text-optional": true, "visibility": "none" }, paint: { "text-color": route.color, "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
+      map.addLayer({ id: `stops-label-${route.id}`, type: "symbol", source: `stops-${route.id}`, minzoom: bus ? 14 : sc ? 12 : 11, layout: { "text-field": ["get", "name"] as unknown as string, "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"], "text-size": bus ? 8 : sc ? 9 : 11, "text-anchor": ["get", "labelAnchor"] as unknown as "top", "text-offset": ["case", ["==", ["get", "labelAnchor"], "left"], ["literal", [0.6, 0]], ["literal", [0, yOff]]] as unknown as [number, number], "text-optional": true, "visibility": "none" }, paint: { "text-color": route.color, "text-halo-color": darkMode ? "#111111" : "#ffffff", "text-halo-width": 1.5 } });
       // Correct label visibility immediately — the visibility effect runs before this effect
       // (earlier declaration order), so it can't set visibility on layers that don't exist yet.
       if (showStationLabels) map.setLayoutProperty(`stops-label-${route.id}`, "visibility", "visible");
@@ -3586,7 +3586,7 @@ export function TransitMap() {
 
       {(selectedNeighbourhoods.size > 0 || selectedStations.size > 0) && !addStationToLine && (
         <div className="pointer-events-none absolute top-[85px] left-0 right-0 flex justify-center">
-          <div className="pointer-events-auto flex items-center rounded-xl border border-indigo-200 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-950 px-4 py-2.5 text-sm text-indigo-700 dark:text-indigo-200 shadow-sm">
+          <div className="pointer-events-auto flex items-center rounded-xl border border-stone-200 bg-white/95 dark:border-stone-600 dark:bg-stone-900/95 backdrop-blur-sm px-4 py-2.5 text-sm font-medium text-stone-800 dark:text-stone-100 shadow-md">
             {selectedNeighbourhoods.size} neighbourhood{selectedNeighbourhoods.size !== 1 ? "s" : ""}, {selectedStations.size} station{selectedStations.size !== 1 ? "s" : ""} selected
           </div>
         </div>
@@ -3672,7 +3672,7 @@ export function TransitMap() {
       {(hasSelection || councilHasRun) && (
         <div className="pointer-events-none absolute bottom-16 left-0 right-0 flex flex-col items-center gap-2">
           {hasSelection && !councilOpen && (
-            <p className="text-[11px] text-stone-500 bg-white/80 rounded-full px-3 py-0.5 shadow-sm">Experimental feature</p>
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 bg-black/10 dark:bg-white/10 backdrop-blur-sm rounded-full px-3 py-0.5">Experimental feature</p>
           )}
           <div className="flex gap-3">
           {hasSelection && !councilOpen && (
