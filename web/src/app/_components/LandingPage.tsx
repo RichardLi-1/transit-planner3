@@ -274,7 +274,7 @@ export default function LandingPage() {
 
           {/* Title */}
           <h1
-            className="mb-3 select-none text-center leading-none text-stone-800"
+            className="mb-3 select-none text-center leading-none text-stone-800 dark:text-stone-100"
             style={{
               fontFamily: '"Google Sans Display", "Google Sans", sans-serif',
               fontWeight: 700,
