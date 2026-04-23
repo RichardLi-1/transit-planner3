@@ -335,7 +335,7 @@ export default function LandingPage() {
         <section style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 64px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
 
           {/* Dark mockup card — simulated council chat */}
-          <div style={{ backgroundColor: "#111827", borderRadius: 28, padding: "28px 28px 20px", overflow: "hidden" }}>
+          <div style={{ backgroundColor: "#111827", borderRadius: 28, padding: "28px 28px 20px", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             {/* Window chrome dots */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 20 }}>
               {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: c }} />)}
@@ -447,7 +447,7 @@ export default function LandingPage() {
         {/* Feature A: Draw any corridor */}
         <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
           {/* Mockup: simplified route drawing */}
-          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", display: "flex", flexDirection: "column", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
               {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
             </div>
@@ -492,7 +492,7 @@ export default function LandingPage() {
           </div>
 
           {/* Mockup: GTFS export UI */}
-          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, overflow: "hidden" }}>
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 20 }}>
               {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
             </div>
@@ -525,7 +525,7 @@ export default function LandingPage() {
         {/* Feature C: Population data */}
         <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 120px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
           {/* Mockup: population heatmap over stops */}
-          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", position: "relative", overflow: "hidden" }}>
+          <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", position: "relative", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
               {["#ef4444","#f59e0b","#22c55e"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", backgroundColor: c }} />)}
             </div>
@@ -660,7 +660,36 @@ export default function LandingPage() {
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 32, paddingTop: 24, borderTop: isDark ? "1px solid #374151" : "1px solid #e8e4dc" }}>
               <p style={{ fontSize: 12.5, color: isDark ? "#9ca3af" : "#a8a29e" }}>© Transit Planner 2026</p>
-              <p style={{ fontSize: 12.5, color: isDark ? "#9ca3af" : "#a8a29e" }}>Built at Hack Canada 2026</p>
+              {/* Toggle dark/light mode — mirrors the TransitMap pattern: flip html.dark class + persist to localStorage */}
+              <button
+                onClick={() => {
+                  const next = !isDark;
+                  document.documentElement.classList.toggle("dark", next);
+                  localStorage.setItem("darkMode", next ? "1" : "0");
+                }}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: 6,
+                  color: isDark ? "#9ca3af" : "#a8a29e", display: "flex", alignItems: "center",
+                  borderRadius: 6, transition: "color 0.2s",
+                }}
+              >
+                {isDark ? (
+                  // Sun icon
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                  </svg>
+                ) : (
+                  // Moon icon
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </footer>
