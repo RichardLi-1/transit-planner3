@@ -212,6 +212,7 @@ export function TransitMap() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [imperial, setImperial] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [aiProvider, setAiProvider] = useState<"anthropic" | "gemini">("anthropic");
   const [highContrast, setHighContrast] = useState(false);
   const { user: authUser, isLoading: authLoading } = useUser();
   const [validationResult, setValidationResult] = useState<{
@@ -651,6 +652,8 @@ export function TransitMap() {
     setDarkMode(stored !== null ? stored === "1" : window.matchMedia("(prefers-color-scheme: dark)").matches);
     setHighContrast(get("highContrast"));
     setShowStationLabels(get("t_showStationLabels"));
+    const storedProvider = localStorage.getItem("aiProvider");
+    if (storedProvider === "gemini") setAiProvider("gemini");
 
     // Follow OS theme changes in real time when no manual preference is stored
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -667,6 +670,7 @@ export function TransitMap() {
   useEffect(() => { localStorage.setItem("t_experimentalFeatures", experimentalFeatures ? "1" : "0"); }, [experimentalFeatures]);
   useEffect(() => { localStorage.setItem("t_advancedMode", advancedMode ? "1" : "0"); }, [advancedMode]);
   useEffect(() => { localStorage.setItem("t_imperial", imperial ? "1" : "0"); }, [imperial]);
+  useEffect(() => { localStorage.setItem("aiProvider", aiProvider); }, [aiProvider]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -4049,6 +4053,21 @@ export function TransitMap() {
                     </span>
                   </button>
                 ))}
+                {/* AI provider selector — two-option pill toggle */}
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-sm text-stone-600">AI provider</span>
+                  <div className="flex rounded-full border border-stone-200 overflow-hidden text-xs font-medium">
+                    {(["anthropic", "gemini"] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setAiProvider(p)}
+                        className={`px-2.5 py-1 capitalize transition-colors ${aiProvider === p ? "bg-stone-700 text-white" : "text-stone-500 hover:bg-stone-50"}`}
+                      >
+                        {p === "anthropic" ? "Claude" : "Gemini"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Danger zone */}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAssistant, DEFAULT_SYSTEM_PROMPT } from "~/server/anthropic";
+import { getProvider, DEFAULT_SYSTEM_PROMPT } from "~/server/ai-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -8,15 +8,16 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       name: string;
       systemPrompt?: string;
+      provider?: string;
     };
 
-    const { name, systemPrompt = DEFAULT_SYSTEM_PROMPT } = body;
+    const { name, systemPrompt = DEFAULT_SYSTEM_PROMPT, provider } = body;
 
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const assistantId = await createAssistant(name, systemPrompt);
+    const assistantId = await getProvider(provider).createAssistant(name, systemPrompt);
 
     return NextResponse.json({ assistantId });
   } catch (error) {

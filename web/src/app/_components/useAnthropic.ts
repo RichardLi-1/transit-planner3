@@ -42,13 +42,16 @@ export function useAnthropic(customSystemPrompt?: string) {
       }));
 
       try {
+        // Read on every call so the user's latest choice is always respected.
+        const provider = localStorage.getItem("aiProvider") ?? "anthropic";
+
         trackEvent("AI Message Sent", {
           message_length: message.length,
           has_custom_system_prompt: Boolean(customSystemPrompt),
           max_tokens: options?.maxTokens,
           model: options?.model,
           streaming: true,
-          provider: "anthropic",
+          provider,
         });
 
         const response = await fetch("/api/ai/chat", {
@@ -61,6 +64,7 @@ export function useAnthropic(customSystemPrompt?: string) {
             systemPrompt: customSystemPrompt,
             model: options?.model,
             maxTokens: options?.maxTokens,
+            provider,
           }),
         });
 

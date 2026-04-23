@@ -1,10 +1,5 @@
 import { NextRequest } from "next/server";
-import {
-  createAssistant,
-  createThread,
-  streamMessage,
-  DEFAULT_SYSTEM_PROMPT,
-} from "~/server/anthropic";
+import { getProvider, DEFAULT_SYSTEM_PROMPT } from "~/server/ai-provider";
 import { trackChatMessage } from "~/server/discord";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +13,7 @@ export async function POST(request: NextRequest) {
       systemPrompt?: string;
       model?: string;
       maxTokens?: number;
+      provider?: string;
     };
 
     const {
@@ -27,6 +23,7 @@ export async function POST(request: NextRequest) {
       systemPrompt = DEFAULT_SYSTEM_PROMPT,
       model = "claude-haiku-4-5-20251001",
       maxTokens = 600,
+      provider,
     } = body;
 
     void trackChatMessage({ message, model });
@@ -40,12 +37,12 @@ export async function POST(request: NextRequest) {
 
     let assistantId = providedAssistantId;
     if (!assistantId) {
-      assistantId = await createAssistant("Transit Planner", systemPrompt);
+      assistantId = await getProvider(provider).createAssistant("Transit Planner", systemPrompt);
     }
 
     let threadId = providedThreadId;
     if (!threadId) {
-      threadId = await createThread(assistantId);
+      threadId = await getProvider(provider).createThread(assistantId);
     }
 
     const encoder = new TextEncoder();
@@ -58,7 +55,7 @@ export async function POST(request: NextRequest) {
             ),
           );
 
-          for await (const chunk of streamMessage(
+          for await (const chunk of getProvider(provider).streamMessage(
             threadId,
             message,
             model,

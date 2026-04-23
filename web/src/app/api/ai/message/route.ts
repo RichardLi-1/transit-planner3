@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createAssistant,
-  createThread,
-  sendMessage,
-  DEFAULT_SYSTEM_PROMPT,
-} from "~/server/anthropic";
+import { getProvider, DEFAULT_SYSTEM_PROMPT } from "~/server/ai-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +12,7 @@ export async function POST(request: NextRequest) {
       systemPrompt?: string;
       model?: string;
       maxTokens?: number;
+      provider?: string;
     };
 
     const {
@@ -26,6 +22,7 @@ export async function POST(request: NextRequest) {
       systemPrompt = DEFAULT_SYSTEM_PROMPT,
       model = "claude-haiku-4-5-20251001",
       maxTokens = 600,
+      provider,
     } = body;
 
     if (!message) {
@@ -37,15 +34,15 @@ export async function POST(request: NextRequest) {
 
     let assistantId = providedAssistantId;
     if (!assistantId) {
-      assistantId = await createAssistant("Transit Planner", systemPrompt);
+      assistantId = await getProvider(provider).createAssistant("Transit Planner", systemPrompt);
     }
 
     let threadId = providedThreadId;
     if (!threadId) {
-      threadId = await createThread(assistantId);
+      threadId = await getProvider(provider).createThread(assistantId);
     }
 
-    const response = await sendMessage(threadId, message, model, maxTokens);
+    const response = await getProvider(provider).sendMessage(threadId, message, model, maxTokens);
 
     return NextResponse.json({
       response,

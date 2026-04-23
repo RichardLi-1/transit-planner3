@@ -9,7 +9,10 @@ export const env = createEnv({
   server: {
     SUPABASE_URL: z.string().url(),
     SUPABASE_KEY: z.string().min(1),
-    ANTHROPIC_API_KEY: z.string().min(1),
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    // Which AI backend to use. Defaults to "anthropic" if unset.
+    AI_PROVIDER: z.enum(["anthropic", "gemini"]).optional(),
     ELEVENLABS_KEY: z.string().min(1),
     DISCORD_WEBHOOK_URL: z.string().url().optional(),
     NODE_ENV: z
@@ -34,6 +37,8 @@ export const env = createEnv({
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_KEY: process.env.SUPABASE_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    AI_PROVIDER: process.env.AI_PROVIDER,
     ELEVENLABS_KEY: process.env.ELEVENLABS_KEY,
     NODE_ENV: process.env.NODE_ENV,
 

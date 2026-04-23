@@ -11,6 +11,7 @@ interface CouncilRequestBody {
   line_type?: string | null;
   context?: string | null;
   existing_lines?: ExistingStop[];
+  provider?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
           lineType: body.line_type,
           extraContext: body.context,
           existingLines: body.existing_lines ?? [],
+          provider: body.provider,
         })) {
           controller.enqueue(encoder.encode(chunk));
         }

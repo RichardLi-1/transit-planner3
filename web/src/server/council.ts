@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAssistant, createThread, streamMessage } from "./anthropic";
+import { getProvider } from "./ai-provider";
 
 // ── Models ─────────────────────────────────────────────────────────────────────
 
@@ -173,10 +173,11 @@ async function* turn(
   agent: Agent,
   threadId: string,
   prompt: string,
+  providerName?: string,
 ): AsyncGenerator<{ chunk: string; full: string }> {
   yield { chunk: sse({ type: "agent_start", agent: agent.name, role: agent.role, color: agent.color }), full: "" };
   let full = "";
-  for await (const text of streamMessage(threadId, prompt, agent.model, agent.maxTokens)) {
+  for await (const text of getProvider(providerName).streamMessage(threadId, prompt, agent.model, agent.maxTokens)) {
     full += text;
     yield { chunk: sse({ type: "agent_text", agent: agent.name, text }), full };
   }
@@ -210,12 +211,13 @@ export interface CouncilInput {
   lineType?: string | null;
   extraContext?: string | null;
   existingLines?: ExistingStop[];
+  provider?: string;
 }
 
 // ── Council orchestration ──────────────────────────────────────────────────────
 
 export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
-  const { neighbourhoods, stations, lineType, extraContext, existingLines = [] } = input;
+  const { neighbourhoods, stations, lineType, extraContext, existingLines = [], provider: providerName } = input;
 
   yield sse({ type: "status", text: "Assembling transit data…" });
   const dataBrief = buildDataBrief(neighbourhoods, stations);
@@ -227,8 +229,8 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
   try {
     const results = await Promise.all(
       AGENTS.map(async (ag) => {
-        const aid = await createAssistant(ag.name, ag.system);
-        const tid = await createThread(aid);
+        const aid = await getProvider(providerName).createAssistant(ag.name, ag.system);
+        const tid = await getProvider(providerName).createThread(aid);
         return [ag.key, tid] as const;
       }),
     );
@@ -276,6 +278,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       brief + "\n\nPropose 6–20 stations. For each, justify on merit: population density served, " +
       "distance from nearest existing station, and cost contribution to total route length. " +
       "Do not retain a stop because of where it falls in sequence — every stop must earn its place. Output route block.",
+      providerName,
     )) { yield chunk; fullA = full; }
     const routeA = extractRoute(fullA);
     if (routeA) yield sse({ type: "route_update", route: routeA, round: 1 });
@@ -290,6 +293,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       "Score each station for Cost Risk + Ridership ROI. Flag stops that are too close to existing TTC stations " +
       "or to other stops already proposed. Challenge the 2 weakest on merit and propose better alternatives " +
       "(must be >800 m from all occupied locations). Output revised route block.",
+      providerName,
     )) { yield chunk; fullB = full; }
     const routeB = extractRoute(fullB);
     if (routeB) yield sse({ type: "route_update", route: routeB, round: 2 });
@@ -302,6 +306,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       `Proposed route:\n${current ? JSON.stringify(current, null, 2) : "(none)"}\n\n` +
       `Affected areas: ${neighbourhoods.join(", ") || "Toronto"}.\n\n` +
       "Identify 2–3 most disruptive stations on merit (disruption caused, not route order). NIMBY scores + mitigations.",
+      providerName,
     )) { yield chunk; fullN = full; }
 
     // ── R4: PR assessment ──────────────────────────────────────────────────────
@@ -312,6 +317,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       "Score top 3 stations on Displacement/Noise/Gentrification/EnvJustice. Overall PR score /40. " +
       "Also flag any stop that appears redundant with an existing or already-proposed station (<800 m, no transfer value). " +
       "One highest-impact recommendation.",
+      providerName,
     )) { yield chunk; fullPr = full; }
 
     // ── R5: Joint rebuttal ────────────────────────────────────────────────────
@@ -324,6 +330,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       "Issue joint rebuttal. Defend or replace the 1–2 most contested stations on merit. " +
       "Any replacement stop must be >800 m from all existing TTC stations AND all already-proposed stops above. " +
       "No stop may be a transfer to another stop on this same proposed line. Output compromise route block.",
+      providerName,
     )) { yield chunk; fullReb = full; }
     const routeReb = extractRoute(fullReb);
     if (routeReb) yield sse({ type: "route_update", route: routeReb, round: 5 });
@@ -339,6 +346,7 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
       "Rule on each contested station on merit. Commit to mitigations. Revised PR score. " +
       "Any modified stop must be >800 m from existing TTC stations AND all other proposed stops listed above. " +
       "No stop may be a transfer to another stop on this same line. Output final route block.",
+      providerName,
     )) { yield chunk; fullCom = full; }
 
     const routeFinal = extractRoute(fullCom) ?? routeReb ?? current;

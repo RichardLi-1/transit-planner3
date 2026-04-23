@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@auth0/nextjs-auth0": "^4.16.0",
+    "@google/generative-ai": "^0.24.1",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@react-three/fiber": "^9.5.0",
     "@supabase/supabase-js": "^2.98.0",

@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createAssistant,
-  createThread,
-  sendMessage,
-} from "~/server/anthropic";
+import { getProvider } from "~/server/ai-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +12,7 @@ export async function POST(request: NextRequest) {
       populationServed?: number;
       connections?: string[];
       allStations?: Array<{ name: string; ridership?: number }>;
+      provider?: string;
     };
 
     const {
@@ -25,6 +22,7 @@ export async function POST(request: NextRequest) {
       populationServed,
       connections = [],
       allStations = [],
+      provider,
     } = body;
 
     if (!stationName || !routeName) {
@@ -54,12 +52,12 @@ Guidelines:
 - Be specific with numbers when provided
 - Mention notable connections to other lines`;
 
-    const assistantId = await createAssistant(
+    const assistantId = await getProvider(provider).createAssistant(
       "TTC Station Analyst",
       systemPrompt,
     );
-    const threadId = await createThread(assistantId);
-    const response = await sendMessage(
+    const threadId = await getProvider(provider).createThread(assistantId);
+    const response = await getProvider(provider).sendMessage(
       threadId,
       prompt,
       "claude-haiku-4-5-20251001",

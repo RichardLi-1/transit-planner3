@@ -488,6 +488,7 @@ export function ChatPanel({
           line_type: null,
           context: null,
           existing_lines: existingLineStops,
+          provider: localStorage.getItem("aiProvider") ?? "anthropic",
         }),
       });
 
