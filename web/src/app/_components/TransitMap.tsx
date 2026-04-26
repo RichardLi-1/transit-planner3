@@ -2487,8 +2487,9 @@ export function TransitMap() {
     map.on("click", "generated-stops-dot", (e) => {
       const name = e.features?.[0]?.properties?.name as string | undefined;
       if (!name) return;
+      e.originalEvent.stopPropagation();
       setSelectedGeneratedStop((prev) => (prev === name ? null : name));
-      map.flyTo({ center: e.lngLat, zoom: Math.max(map.getZoom(), 13), duration: 400 });
+      setStationPopup({ name, routeId: generatedRoute.id, x: e.point.x, y: e.point.y, coords: [e.lngLat.lng, e.lngLat.lat] });
     });
 
     map.on("mouseenter", "generated-stops-dot", () => { map.getCanvas().style.cursor = "pointer"; });
@@ -3182,13 +3183,14 @@ export function TransitMap() {
 
 	            {generatedRoute && (
 	              <div className="mt-1 border-t border-stone-100 pt-2">
-	                <li
-	                  className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900 list-none"
+	                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">Council Proposal</p>
+	                <div
+	                  className="flex cursor-pointer items-center gap-2 text-sm text-stone-600 hover:text-stone-900"
 	                  onClick={() => setSelectedRouteId(null)}
 	                >
 	                  <span className="h-2 w-4 shrink-0 rounded-full" style={{ background: generatedRoute.color }} />
 	                  <span className="truncate">{generatedRoute.name}</span>
-	                </li>
+	                </div>
 	              </div>
 	            )}
 	          </div>
@@ -3705,55 +3707,57 @@ export function TransitMap() {
 
 
       {/* Station popup */}
-      {stationPopup && (
-        <StationPopup
-          popup={stationPopup}
-          allRoutes={routes}
-          stationPopulations={stationPopulations}
-          isDeletable={true}
-          connectedRoutes={
-            routes.filter((r) =>
-              r.id !== stationPopup.routeId &&
-              r.stops.some((s) => s.name === stationPopup.name)
-            )
-          }
-          onRemoveTransfer={(targetRouteId) => {
-            handleDeleteStop(stationPopup.name, targetRouteId);
-          }}
-          onClose={() => setStationPopup(null)}
-          onDelete={() => { handleDeleteStop(stationPopup.name, stationPopup.routeId); setStationPopup(null); }}
-          onRename={(newName) => {
-            const oldName = stationPopup.name;
-            snapshotHistory();
-            setRoutes((prev) => prev.map((r) => ({
-              ...r,
-              stops: r.stops.map((s) => s.name === oldName ? { ...s, name: newName } : s),
-            })));
-            setSelectedStop((s) => s === oldName ? newName : s);
-            setStationPopup((p) => p ? { ...p, name: newName } : p);
-          }}
-          onAddTransfer={(targetRouteId) => {
-            const { name, coords } = stationPopup;
-            // Add this station to the target route's stops (terminus-aware)
-            snapshotHistory();
-            setRoutes((prev) => prev.map((r) => {
-              if (r.id !== targetRouteId) return r;
-              // Skip if already present
-              if (r.stops.some((s) => s.name === name)) return r;
-              const newStop = { name, coords };
-              if (r.stops.length === 0) return { ...r, stops: [newStop] };
-              const first = r.stops[0]!;
-              const last = r.stops[r.stops.length - 1]!;
-              const dFirst = haversineKm(coords, first.coords);
-              const dLast  = haversineKm(coords, last.coords);
-              const roadSnapped = r.type === "bus" || r.type === "streetcar";
-              const newStops = dFirst < dLast ? [newStop, ...r.stops] : [...r.stops, newStop];
-              return { ...r, stops: newStops, shape: roadSnapped ? r.shape : undefined };
-            }));
-            setStationPopup(null);
-          }}
-        />
-      )}
+      {stationPopup && (() => {
+        // True only for user-drawn custom routes; generated route stops are read-only.
+        const isCustom = routes.some(r => r.id === stationPopup.routeId);
+        return (
+          <StationPopup
+            popup={stationPopup}
+            allRoutes={generatedRoute ? [...routes, generatedRoute] : routes}
+            stationPopulations={stationPopulations}
+            isDeletable={isCustom}
+            connectedRoutes={
+              routes.filter((r) =>
+                r.id !== stationPopup.routeId &&
+                r.stops.some((s) => s.name === stationPopup.name)
+              )
+            }
+            onRemoveTransfer={(targetRouteId) => {
+              handleDeleteStop(stationPopup.name, targetRouteId);
+            }}
+            onClose={() => setStationPopup(null)}
+            onDelete={() => { handleDeleteStop(stationPopup.name, stationPopup.routeId); setStationPopup(null); }}
+            onRename={!isCustom ? undefined : (newName) => {
+              const oldName = stationPopup.name;
+              snapshotHistory();
+              setRoutes((prev) => prev.map((r) => ({
+                ...r,
+                stops: r.stops.map((s) => s.name === oldName ? { ...s, name: newName } : s),
+              })));
+              setSelectedStop((s) => s === oldName ? newName : s);
+              setStationPopup((p) => p ? { ...p, name: newName } : p);
+            }}
+            onAddTransfer={!isCustom ? undefined : (targetRouteId) => {
+              const { name, coords } = stationPopup;
+              snapshotHistory();
+              setRoutes((prev) => prev.map((r) => {
+                if (r.id !== targetRouteId) return r;
+                if (r.stops.some((s) => s.name === name)) return r;
+                const newStop = { name, coords };
+                if (r.stops.length === 0) return { ...r, stops: [newStop] };
+                const first = r.stops[0]!;
+                const last = r.stops[r.stops.length - 1]!;
+                const dFirst = haversineKm(coords, first.coords);
+                const dLast  = haversineKm(coords, last.coords);
+                const roadSnapped = r.type === "bus" || r.type === "streetcar";
+                const newStops = dFirst < dLast ? [newStop, ...r.stops] : [...r.stops, newStop];
+                return { ...r, stops: newStops, shape: roadSnapped ? r.shape : undefined };
+              }));
+              setStationPopup(null);
+            }}
+          />
+        );
+      })()}
 
 
       {/* Chat panel — bottom right, above zoom controls */}

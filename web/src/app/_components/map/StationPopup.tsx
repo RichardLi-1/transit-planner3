@@ -23,7 +23,7 @@ export function StationPopup({
   connectedRoutes: Route[];
   onClose: () => void;
   onDelete: () => void;
-  onAddTransfer: (targetRouteId: string) => void;
+  onAddTransfer?: (targetRouteId: string) => void;
   onRemoveTransfer: (targetRouteId: string) => void;
   onRename?: (newName: string) => void;
 }) {
@@ -257,7 +257,7 @@ export function StationPopup({
           </div>
         </div>
       )}
-      {transferableRoutes.length > 0 && (
+      {onAddTransfer && transferableRoutes.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-semibold text-stone-500 shrink-0">Add transfer to:</span>
           {transferableRoutes.map((r) => (

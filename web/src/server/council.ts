@@ -20,7 +20,7 @@ Your punchy one-liner here.
 const PLANNING_RULES = `PLANNING RULES (apply to all proposals and critiques):
 1. COST: Route length drives cost — every extra kilometre is expensive and adds years to delivery. Prefer compact, direct alignments. Flag any route that seems unnecessarily long.
 2. POPULATION: Prioritise high-density corridors and destinations that are currently underserved or where existing stations are overcrowded. Each stop should justify its existence with clear population demand.
-3. STATION SPACING: New stops must be at least 800 m from BOTH (a) existing TTC stations and (b) any stops already proposed earlier in this debate — unless the stop is an explicit transfer to that line. Stops too close to either category with no transfer justification must be relocated or cut.
+3. STATION SPACING: New stops must be at least 800 m from BOTH (a) existing TTC stations and (b) any stops already proposed earlier in this debate — unless the stop is an explicit transfer to that line. Stops too close to either category with no transfer justification must be relocated or cut. Additionally, no two consecutive stops on the same route may be more than 1500 m apart — if a gap would exceed this, add an intermediate stop or adjust the alignment.
 4. SUBWAY ONLY: Every route proposed is a subway line. Do not suggest streetcar or bus alternatives.
 5. NO SELF-CONNECTIONS: A stop on the proposed route cannot be labelled as a transfer to another stop on the same proposed route. Transfers are only valid when connecting to a different, pre-existing line.
 6. MERIT-BASED SELECTION: Evaluate each candidate stop independently on cost, population served, and spacing. Do not retain a stop simply because of where it falls in the sequence — cut it if it fails on merit.`;
@@ -39,11 +39,14 @@ Write your analysis, then call the propose_route tool with your recommended rout
 
 const PLANNER_B_SYSTEM = `You are Jordan Park, Infrastructure Cost Analyst, TTC. Every dollar and every kilometre must be justified.
 
-For each station in Alex's proposal, score:
-- Cost Risk 1–10 (longer tunnel segment = higher score)
+Propose the most cost-efficient subway corridor for the given brief — independently, without reference to any other planner's work. Prioritise shorter total route length, direct alignments, and fewer high-ridership stops over broad coverage.
+
+For each station you include, state:
+- Nearest intersection
+- Cost Risk 1–10 (tunnel distance to next stop — longer = higher)
 - Ridership ROI 1–10 (population density served vs. construction cost)
 
-Flag any stop that is redundant (within 800 m of an existing station without transfer value) or that unnecessarily extends the route length. Challenge the 2 weakest stations and propose shorter or better-spaced alternatives.
+Cut any stop where Cost Risk exceeds Ridership ROI. Flag any stop within 800 m of an existing TTC station unless it is an explicit transfer.
 
 ${PLANNING_RULES}
 
@@ -85,7 +88,12 @@ ${QUOTE_BLOCK}`;
 
 const REBUTTAL_SYSTEM = `You are Alex Chen and Jordan Park in joint rebuttal.
 
-Defend strong stations with data (population served, distance from nearest existing station). For the 1–2 most contested stations: concede or replace with alternatives that better satisfy cost, population, and spacing constraints.
+You each independently proposed a different route. Now synthesise the best of both into a single refined route:
+- Stops that appear in both proposals → include unless they violate spacing rules
+- Stops unique to Alex's route → keep if ridership/equity justifies the cost
+- Stops unique to Jordan's route → keep if cost efficiency is the stronger argument
+- For the 1–2 most contested stops: concede or replace with data-backed alternatives
+
 State tradeoffs explicitly. Be decisive.
 
 ${PLANNING_RULES}
@@ -165,7 +173,7 @@ const PROPOSE_ROUTE_TOOL: ToolDefinition = {
       color: { type: "string", description: "Hex colour code, e.g. #2563eb" },
       stops: {
         type: "array",
-        description: "Stops ordered along the corridor — no zigzagging, ≥800 m spacing. Toronto: lon −79.65 to −79.10, lat 43.55 to 43.85.",
+        description: "Stops ordered along the corridor — no zigzagging. Each consecutive pair must be 800 m–1500 m apart. Toronto: lon −79.65 to −79.10, lat 43.55 to 43.85.",
         minItems: 6,
         maxItems: 20,
         items: {
@@ -187,6 +195,30 @@ const PROPOSE_ROUTE_TOOL: ToolDefinition = {
     required: ["name", "type", "color", "stops"],
   },
 };
+
+// ── Geometry helpers ───────────────────────────────────────────────────────────
+
+// Greedy nearest-neighbour reordering so stops connect in geographic sequence
+// regardless of the order the model outputs them. O(n²) is fine for ≤20 stops.
+function sortRouteStops(route: Record<string, unknown>): Record<string, unknown> {
+  const stops = route.stops as Array<{ name: string; coords: [number, number] }> | undefined;
+  if (!stops || stops.length <= 2) return route;
+
+  const remaining = [...stops];
+  const sorted = [remaining.splice(0, 1)[0]!];
+  while (remaining.length > 0) {
+    const last = sorted[sorted.length - 1]!;
+    let minD = Infinity, minIdx = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      const dx = last.coords[0] - remaining[i]!.coords[0];
+      const dy = last.coords[1] - remaining[i]!.coords[1];
+      const d = dx * dx + dy * dy;
+      if (d < minD) { minD = d; minIdx = i; }
+    }
+    sorted.push(remaining.splice(minIdx, 1)[0]!);
+  }
+  return { ...route, stops: sorted };
+}
 
 // ── Agent turns ────────────────────────────────────────────────────────────────
 
@@ -230,7 +262,7 @@ async function* turnWithRoute(
       yield { chunk: sse({ type: "agent_text", agent: agent.name, text: item.text }), full, route: null };
     } else {
       // type === "tool" — the guaranteed structured route; emitted once at end of stream
-      route = item.input;
+      route = sortRouteStops(item.input);
     }
   }
 
@@ -335,16 +367,14 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
     )) { yield chunk; fullA = full; if (route) routeA = route; }
     if (routeA) yield sse({ type: "route_update", route: routeA, round: 1 });
 
-    // ── R2: Planner B cost review ──────────────────────────────────────────────
-    const proposedA = stopsLabel(routeA);
+    // ── R2: Planner B independent proposal ────────────────────────────────────
     let fullB = "", routeB: Record<string, unknown> | null = null;
     for await (const { chunk, full, route } of turnWithRoute(
       ag("planner_b"), sessions["planner_b"]!,
-      brief + `\n\n## Alex's Proposal\n${fullA}\n\n` +
-      `## Already-proposed stops (treat as occupied — 800 m exclusion zone for any NEW stop):\n${proposedA}\n\n` +
-      "Score each station for Cost Risk + Ridership ROI. Flag stops that are too close to existing TTC stations " +
-      "or to other stops already proposed. Challenge the 2 weakest on merit and propose better alternatives " +
-      "(must be >800 m from all occupied locations).",
+      brief + "\n\nPropose 6–20 stations for the most cost-efficient corridor. " +
+      "For each stop, state the nearest intersection, Cost Risk 1–10, and Ridership ROI 1–10. " +
+      "Cut any stop where Cost Risk exceeds Ridership ROI. Prefer direct alignments and fewer, higher-ridership stops. " +
+      "Do not retain a stop because of where it falls in sequence — every stop must earn its place.",
       providerName,
     )) { yield chunk; fullB = full; if (route) routeB = route; }
     if (routeB) yield sse({ type: "route_update", route: routeB, round: 2 });
@@ -354,9 +384,10 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
     let fullN = "";
     for await (const { chunk, full } of turn(
       ag("nimby"), sessions["nimby"]!,
-      `Proposed route:\n${current ? JSON.stringify(current, null, 2) : "(none)"}\n\n` +
+      `Alex's proposal:\n${routeA ? JSON.stringify(routeA, null, 2) : "(none)"}\n\n` +
+      `Jordan's proposal:\n${routeB ? JSON.stringify(routeB, null, 2) : "(none)"}\n\n` +
       `Affected areas: ${neighbourhoods.join(", ") || "Toronto"}.\n\n` +
-      "Identify 2–3 most disruptive stations on merit (disruption caused, not route order). NIMBY scores + mitigations.",
+      "Identify 2–3 most disruptive stations across both proposals on merit. NIMBY scores + mitigations.",
       providerName,
     )) { yield chunk; fullN = full; }
 
@@ -372,7 +403,8 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
     )) { yield chunk; fullPr = full; }
 
     // ── R5: Joint rebuttal ────────────────────────────────────────────────────
-    const allProposed = stopsLabel(current);
+    // Combine stops from both independent proposals for the 800 m exclusion zone.
+    const allProposed = [stopsLabel(routeA), stopsLabel(routeB)].filter(s => s !== "(none)").join("; ") || "(none)";
     let fullReb = "", routeReb: Record<string, unknown> | null = null;
     for await (const { chunk, full, route } of turnWithRoute(
       ag("rebuttal"), sessions["rebuttal"]!,
