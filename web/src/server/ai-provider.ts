@@ -7,6 +7,26 @@ import "server-only";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+// A tool the model can "call" to output structured data.
+// The model is forced to call it, so toolInput is always valid JSON matching the schema.
+// 📖 Learn: this is the Strategy pattern for structured output — same shape works for
+// both Anthropic tool use and Gemini function calling.
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  // 📖 Learn: "inputSchema" is a JSON Schema object that describes the shape of the
+  // tool's arguments. Both Anthropic and Gemini accept this same JSON Schema format.
+  inputSchema: Record<string, unknown>;
+}
+
+// What streamMessageWithTool yields on each iteration — a discriminated union.
+// The caller narrows with: if (chunk.type === "text") { ... } else { ... }
+// 📖 Learn: discriminated unions let TypeScript know exactly which fields exist
+// depending on the "type" tag, so you get autocomplete and type safety in each branch.
+export type ToolStreamChunk =
+  | { type: "text"; text: string }
+  | { type: "tool"; input: Record<string, unknown> };
+
 export interface AIProvider {
   // Creates a named assistant with a system prompt. Returns an opaque ID.
   createAssistant(name: string, systemPrompt?: string): Promise<string>;
@@ -29,6 +49,17 @@ export interface AIProvider {
     model?: string,
     maxTokens?: number,
   ): Promise<string>;
+
+  // Like streamMessage, but forces the model to call `tool` and emit structured JSON.
+  // Yields text chunks while the model reasons, then a single { type: "tool" } chunk
+  // at the end with the validated tool arguments.
+  streamMessageWithTool(
+    threadId: string,
+    content: string,
+    tool: ToolDefinition,
+    model?: string,
+    maxTokens?: number,
+  ): AsyncGenerator<ToolStreamChunk, void, unknown>;
 
   // Stateless call: pass a system prompt + full message history directly.
   // Used by docs-chat, which manages its own history client-side.

@@ -1,7 +1,7 @@
 import "server-only";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { AIProvider, ChatMessage } from "./ai-provider";
+import { GoogleGenerativeAI, FunctionCallingMode } from "@google/generative-ai";
+import type { AIProvider, ChatMessage, ToolDefinition, ToolStreamChunk } from "./ai-provider";
 
 // 📖 Learn: Gemini and Anthropic both take "system prompt + message history",
 // but the SDKs look different in three ways:
@@ -108,6 +108,65 @@ export function createGeminiProvider(): AIProvider {
           ];
           threadStore.set(threadId, { ...thread, messages: nextMessages });
         }
+      }
+    },
+
+    // 📖 Learn: Gemini calls this "function calling" rather than "tool use", but
+    // the idea is identical. Key differences from Anthropic:
+    //   1. Functions are declared inside a `tools` array as `functionDeclarations`
+    //   2. `toolConfig.functionCallingConfig.mode = "ANY"` forces a function call
+    //   3. The function arguments don't stream — they're in result.response after the
+    //      stream completes. Text tokens stream normally; we get the call at the end.
+    async *streamMessageWithTool(threadId, content, tool: ToolDefinition, model = "claude-haiku-4-5-20251001", maxTokens = 900): AsyncGenerator<ToolStreamChunk> {
+      const thread    = getThread(threadId);
+      const assistant = getAssistant(thread.assistantId);
+
+      const geminiModel = genAI.getGenerativeModel({
+        model: mapModel(model),
+        systemInstruction: assistant.systemPrompt,
+        generationConfig: { maxOutputTokens: maxTokens },
+        // 📖 Learn: tools are declared as functionDeclarations inside the tools array.
+        // The parameters field accepts the same JSON Schema format Anthropic uses.
+        tools: [{ functionDeclarations: [{
+          name: tool.name,
+          description: tool.description,
+          // 📖 Learn: Gemini's SDK has a strict FunctionDeclarationSchema type, but our
+          // inputSchema is already the right JSON Schema shape — we cast through unknown
+          // to satisfy TypeScript without rewriting the schema in Gemini's enum format.
+          parameters: tool.inputSchema as unknown as Parameters<typeof Object>[0],
+        }]}],
+        // FunctionCallingMode.ANY = model must call a function (same as Anthropic's tool_choice: "tool")
+        toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
+      });
+
+      const chat = geminiModel.startChat({ history: toGeminiHistory(thread.messages) });
+      const result = await chat.sendMessageStream(content);
+
+      let fullText = "";
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        if (text) {
+          fullText += text;
+          yield { type: "text", text };
+        }
+      }
+
+      // 📖 Learn: result.response is a Promise that resolves once the stream is fully
+      // consumed. It holds the complete response including any function calls that the
+      // model made. Unlike Anthropic, the args arrive all at once, not streamed.
+      const response = await result.response;
+      const calls = response.functionCalls();
+      const call = calls?.find((fc) => fc.name === tool.name);
+
+      if (fullText) {
+        threadStore.set(threadId, {
+          ...thread,
+          messages: [...thread.messages, { role: "user", content }, { role: "assistant", content: fullText }],
+        });
+      }
+
+      if (call?.args) {
+        yield { type: "tool", input: call.args as Record<string, unknown> };
       }
     },
 

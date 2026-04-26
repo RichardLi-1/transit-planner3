@@ -1,7 +1,7 @@
 import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { AIProvider, ChatMessage } from "./ai-provider";
+import type { AIProvider, ChatMessage, ToolDefinition, ToolStreamChunk } from "./ai-provider";
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a transit route planning assistant for Toronto.
 
@@ -115,6 +115,70 @@ export function createAnthropicProvider(): AIProvider {
             ...thread,
             messages: [...nextMessages, { role: "assistant", content: full }],
           });
+        }
+      }
+    },
+
+    // 📖 Learn: "tool_choice: { type: 'tool', name: '...' }" tells Claude it MUST call
+    // that specific tool. The model can still write text first (its reasoning), then
+    // calls the tool. We stream both: text chunks come as text_delta events; the tool
+    // arguments arrive as input_json_delta fragments that we reassemble into JSON.
+    async *streamMessageWithTool(threadId, content, tool: ToolDefinition, model = "claude-haiku-4-5-20251001", maxTokens = 900): AsyncGenerator<ToolStreamChunk> {
+      const thread = getThread(threadId);
+      const assistant = getAssistant(thread.assistantId);
+      const nextMessages: StoredMessage[] = [
+        ...thread.messages,
+        { role: "user", content },
+      ];
+
+      const stream = client.messages.stream({
+        model,
+        max_tokens: maxTokens,
+        system: assistant.systemPrompt,
+        messages: nextMessages,
+        tools: [{
+          name: tool.name,
+          description: tool.description,
+          // 📖 Learn: Anthropic names this field "input_schema" (snake_case)
+          // even though we store it as "inputSchema" in our shared ToolDefinition.
+          input_schema: tool.inputSchema as Anthropic.Messages.Tool["input_schema"],
+        }],
+        // Force Claude to call exactly this tool (not just "maybe use a tool")
+        tool_choice: { type: "tool", name: tool.name },
+      });
+
+      let fullText = "";
+      let toolInputJson = "";
+
+      try {
+        for await (const event of stream) {
+          if (event.type === "content_block_delta") {
+            if (event.delta.type === "text_delta") {
+              fullText += event.delta.text;
+              yield { type: "text", text: event.delta.text };
+            } else if (event.delta.type === "input_json_delta") {
+              // 📖 Learn: the tool JSON is streamed as fragments (e.g. '{"name"' then
+              // ':"Eglinton"' then ',"stops":[' ...). We accumulate and parse at the end.
+              toolInputJson += event.delta.partial_json;
+            }
+          }
+        }
+      } finally {
+        // Store only the text portion — agents run once per council, so we don't need
+        // the tool call in history for multi-turn continuity.
+        if (fullText) {
+          threadStore.set(threadId, {
+            ...thread,
+            messages: [...nextMessages, { role: "assistant", content: fullText }],
+          });
+        }
+      }
+
+      if (toolInputJson) {
+        try {
+          yield { type: "tool", input: JSON.parse(toolInputJson) as Record<string, unknown> };
+        } catch {
+          // Malformed JSON from the model — caller will treat route as null
         }
       }
     },

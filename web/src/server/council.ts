@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getProvider } from "./ai-provider";
+import type { ToolDefinition } from "./ai-provider";
 
 // ── Models ─────────────────────────────────────────────────────────────────────
 
@@ -15,20 +16,6 @@ const QUOTE_BLOCK = `Also include a \`\`\`quote block with a single punchy sente
 Your punchy one-liner here.
 \`\`\``;
 
-const ROUTE_BLOCK = `End your message with a \`\`\`route block:
-
-\`\`\`route
-{
-  "name": "Route Name",
-  "type": "subway",
-  "color": "#hexcolor",
-  "stops": [{"name": "Intersection/Landmark", "coords": [-79.XXXX, 43.XXXX]}]
-}
-\`\`\`
-
-Toronto: lon −79.65 to −79.10, lat 43.55 to 43.85. Include 6–10 stops.
-CRITICAL: stops must be geographically ordered along the corridor — each stop must be adjacent to the previous one. No zigzagging. No gap larger than ~800 m between consecutive stops.
-ALL routes are subways — type must always be "subway".`;
 
 const PLANNING_RULES = `PLANNING RULES (apply to all proposals and critiques):
 1. COST: Route length drives cost — every extra kilometre is expensive and adds years to delivery. Prefer compact, direct alignments. Flag any route that seems unnecessarily long.
@@ -48,7 +35,7 @@ ${PLANNING_RULES}
 
 ${QUOTE_BLOCK}
 
-${ROUTE_BLOCK}`;
+Write your analysis, then call the propose_route tool with your recommended route.`;
 
 const PLANNER_B_SYSTEM = `You are Jordan Park, Infrastructure Cost Analyst, TTC. Every dollar and every kilometre must be justified.
 
@@ -62,7 +49,7 @@ ${PLANNING_RULES}
 
 ${QUOTE_BLOCK}
 
-${ROUTE_BLOCK}`;
+Write your analysis, then call the propose_route tool with your recommended route.`;
 
 const NIMBY_SYSTEM = `You are Margaret Thompson, Residents' Association chair. Passionate and protective of existing residents.
 
@@ -105,7 +92,7 @@ ${PLANNING_RULES}
 
 ${QUOTE_BLOCK}
 
-${ROUTE_BLOCK}`;
+Write your analysis, then call the propose_route tool with your recommended route.`;
 
 const COMMISSION_SYSTEM = `You are the Toronto Transit Commission Planning Committee.
 
@@ -120,7 +107,7 @@ ${PLANNING_RULES}
 
 ${QUOTE_BLOCK}
 
-${ROUTE_BLOCK}`;
+Write your ruling, then call the propose_route tool with the final binding route.`;
 
 // ── Agent registry ─────────────────────────────────────────────────────────────
 
@@ -135,11 +122,12 @@ interface Agent {
 }
 
 const AGENTS: Agent[] = [
-  { key: "planner_a",  name: "Alex Chen",          role: "Ridership Planner",      color: "#2563eb", system: PLANNER_A_SYSTEM,  model: SONNET, maxTokens: 700 },
-  { key: "planner_b",  name: "Jordan Park",         role: "Infrastructure Analyst", color: "#16a34a", system: PLANNER_B_SYSTEM,  model: SONNET, maxTokens: 700 },
+  // maxTokens for route agents raised to 900: tool call JSON (~500 tokens for 10 stops) + reasoning text
+  { key: "planner_a",  name: "Alex Chen",          role: "Ridership Planner",      color: "#2563eb", system: PLANNER_A_SYSTEM,  model: SONNET, maxTokens: 900 },
+  { key: "planner_b",  name: "Jordan Park",         role: "Infrastructure Analyst", color: "#16a34a", system: PLANNER_B_SYSTEM,  model: SONNET, maxTokens: 900 },
   { key: "nimby",      name: "Margaret Thompson",   role: "Neighbourhood Rep",      color: "#dc2626", system: NIMBY_SYSTEM,      model: HAIKU,  maxTokens: 300 },
   { key: "pr",         name: "Devon Walsh",         role: "PR Director",            color: "#d97706", system: PR_SYSTEM,         model: HAIKU,  maxTokens: 300 },
-  { key: "rebuttal",   name: "Alex & Jordan",       role: "Joint Rebuttal",         color: "#7c3aed", system: REBUTTAL_SYSTEM,   model: SONNET, maxTokens: 700 },
+  { key: "rebuttal",   name: "Alex & Jordan",       role: "Joint Rebuttal",         color: "#7c3aed", system: REBUTTAL_SYSTEM,   model: SONNET, maxTokens: 900 },
   { key: "commission", name: "Planning Commission", role: "Final Decision",         color: "#64748b", system: COMMISSION_SYSTEM, model: SONNET, maxTokens: 2000 },
 ];
 
@@ -147,12 +135,6 @@ const AGENTS: Agent[] = [
 
 function sse(payload: Record<string, unknown>): string {
   return "data: " + JSON.stringify(payload) + "\n\n";
-}
-
-function extractRoute(text: string): Record<string, unknown> | null {
-  const m = /```route\s*(.*?)```/s.exec(text);
-  if (!m) return null;
-  try { return JSON.parse(m[1]!.trim()) as Record<string, unknown>; } catch { return null; }
 }
 
 function extractQuote(text: string): string | null {
@@ -167,8 +149,48 @@ function stopsLabel(route: Record<string, unknown> | null): string {
   return stops.map((s) => `${s.name} (${s.coords[0].toFixed(4)}, ${s.coords[1].toFixed(4)})`).join("; ");
 }
 
-// ── Single agent turn ──────────────────────────────────────────────────────────
+// ── Tool definition ────────────────────────────────────────────────────────────
 
+// 📖 Learn: JSON Schema describes the *shape* of the tool arguments. Both Anthropic
+// and Gemini accept this same format. The model is forced to call this tool, so the
+// output is always a valid, parseable object — no regex fallback needed.
+const PROPOSE_ROUTE_TOOL: ToolDefinition = {
+  name: "propose_route",
+  description: "Submit the proposed subway route after your written analysis.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name:  { type: "string", description: "Short route name, e.g. 'Eglinton West Extension'" },
+      type:  { type: "string", enum: ["subway"] },
+      color: { type: "string", description: "Hex colour code, e.g. #2563eb" },
+      stops: {
+        type: "array",
+        description: "Stops ordered along the corridor — no zigzagging, ≥800 m spacing. Toronto: lon −79.65 to −79.10, lat 43.55 to 43.85.",
+        minItems: 6,
+        maxItems: 20,
+        items: {
+          type: "object",
+          properties: {
+            name:   { type: "string", description: "Nearest intersection or landmark" },
+            coords: {
+              type: "array",
+              items: { type: "number" },
+              minItems: 2,
+              maxItems: 2,
+              description: "[longitude, latitude]",
+            },
+          },
+          required: ["name", "coords"],
+        },
+      },
+    },
+    required: ["name", "type", "color", "stops"],
+  },
+};
+
+// ── Agent turns ────────────────────────────────────────────────────────────────
+
+// Text-only turn (NIMBY, PR) — streams text, no route output.
 async function* turn(
   agent: Agent,
   threadId: string,
@@ -184,6 +206,37 @@ async function* turn(
   const quote = extractQuote(full);
   if (quote) yield { chunk: sse({ type: "agent_quote", agent: agent.name, text: quote }), full };
   yield { chunk: sse({ type: "agent_end", agent: agent.name }), full };
+}
+
+// Route-producing turn (planners, rebuttal, commission) — same as turn(), but uses
+// streamMessageWithTool so the model is *forced* to call propose_route. The route
+// arrives as a validated JSON object in the final { type: "tool" } chunk, not parsed
+// from free-form text. `route` is null on every yield except the last (agent_end).
+async function* turnWithRoute(
+  agent: Agent,
+  threadId: string,
+  prompt: string,
+  providerName?: string,
+): AsyncGenerator<{ chunk: string; full: string; route: Record<string, unknown> | null }> {
+  yield { chunk: sse({ type: "agent_start", agent: agent.name, role: agent.role, color: agent.color }), full: "", route: null };
+  let full = "";
+  let route: Record<string, unknown> | null = null;
+
+  for await (const item of getProvider(providerName).streamMessageWithTool(
+    threadId, prompt, PROPOSE_ROUTE_TOOL, agent.model, agent.maxTokens,
+  )) {
+    if (item.type === "text") {
+      full += item.text;
+      yield { chunk: sse({ type: "agent_text", agent: agent.name, text: item.text }), full, route: null };
+    } else {
+      // type === "tool" — the guaranteed structured route; emitted once at end of stream
+      route = item.input;
+    }
+  }
+
+  const quote = extractQuote(full);
+  if (quote) yield { chunk: sse({ type: "agent_quote", agent: agent.name, text: quote }), full, route: null };
+  yield { chunk: sse({ type: "agent_end", agent: agent.name }), full, route };
 }
 
 // ── Data brief (no DB required — agents have Toronto knowledge) ────────────────
@@ -272,30 +325,28 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
 
   try {
     // ── R1: Planner A initial proposal ────────────────────────────────────────
-    let fullA = "";
-    for await (const { chunk, full } of turn(
+    let fullA = "", routeA: Record<string, unknown> | null = null;
+    for await (const { chunk, full, route } of turnWithRoute(
       ag("planner_a"), sessions["planner_a"]!,
       brief + "\n\nPropose 6–20 stations. For each, justify on merit: population density served, " +
       "distance from nearest existing station, and cost contribution to total route length. " +
-      "Do not retain a stop because of where it falls in sequence — every stop must earn its place. Output route block.",
+      "Do not retain a stop because of where it falls in sequence — every stop must earn its place.",
       providerName,
-    )) { yield chunk; fullA = full; }
-    const routeA = extractRoute(fullA);
+    )) { yield chunk; fullA = full; if (route) routeA = route; }
     if (routeA) yield sse({ type: "route_update", route: routeA, round: 1 });
 
     // ── R2: Planner B cost review ──────────────────────────────────────────────
     const proposedA = stopsLabel(routeA);
-    let fullB = "";
-    for await (const { chunk, full } of turn(
+    let fullB = "", routeB: Record<string, unknown> | null = null;
+    for await (const { chunk, full, route } of turnWithRoute(
       ag("planner_b"), sessions["planner_b"]!,
       brief + `\n\n## Alex's Proposal\n${fullA}\n\n` +
       `## Already-proposed stops (treat as occupied — 800 m exclusion zone for any NEW stop):\n${proposedA}\n\n` +
       "Score each station for Cost Risk + Ridership ROI. Flag stops that are too close to existing TTC stations " +
       "or to other stops already proposed. Challenge the 2 weakest on merit and propose better alternatives " +
-      "(must be >800 m from all occupied locations). Output revised route block.",
+      "(must be >800 m from all occupied locations).",
       providerName,
-    )) { yield chunk; fullB = full; }
-    const routeB = extractRoute(fullB);
+    )) { yield chunk; fullB = full; if (route) routeB = route; }
     if (routeB) yield sse({ type: "route_update", route: routeB, round: 2 });
     const current = routeB ?? routeA;
 
@@ -322,34 +373,33 @@ export async function* runCouncil(input: CouncilInput): AsyncGenerator<string> {
 
     // ── R5: Joint rebuttal ────────────────────────────────────────────────────
     const allProposed = stopsLabel(current);
-    let fullReb = "";
-    for await (const { chunk, full } of turn(
+    let fullReb = "", routeReb: Record<string, unknown> | null = null;
+    for await (const { chunk, full, route } of turnWithRoute(
       ag("rebuttal"), sessions["rebuttal"]!,
       brief + `\n\n**Alex:** ${fullA}\n**Jordan:** ${fullB}\n**Margaret:** ${fullN}\n**Devon:** ${fullPr}\n\n` +
       `## All stops proposed so far (occupied locations — 800 m exclusion zone for replacements):\n${allProposed}\n\n` +
       "Issue joint rebuttal. Defend or replace the 1–2 most contested stations on merit. " +
       "Any replacement stop must be >800 m from all existing TTC stations AND all already-proposed stops above. " +
-      "No stop may be a transfer to another stop on this same proposed line. Output compromise route block.",
+      "No stop may be a transfer to another stop on this same proposed line.",
       providerName,
-    )) { yield chunk; fullReb = full; }
-    const routeReb = extractRoute(fullReb);
+    )) { yield chunk; fullReb = full; if (route) routeReb = route; }
     if (routeReb) yield sse({ type: "route_update", route: routeReb, round: 5 });
 
     // ── R6: Commission final ───────────────────────────────────────────────────
     const finalOccupied = stopsLabel(routeReb ?? current);
-    let fullCom = "";
-    for await (const { chunk, full } of turn(
+    let fullCom = "", routeCom: Record<string, unknown> | null = null;
+    for await (const { chunk, full, route } of turnWithRoute(
       ag("commission"), sessions["commission"]!,
       brief + `\n\n**Alex:** ${fullA}\n**Jordan:** ${fullB}\n**Margaret:** ${fullN}\n` +
       `**Devon:** ${fullPr}\n**Rebuttal:** ${fullReb}\n\n` +
       `## All stops proposed across all rounds (occupied — 800 m exclusion zone):\n${finalOccupied}\n\n` +
       "Rule on each contested station on merit. Commit to mitigations. Revised PR score. " +
       "Any modified stop must be >800 m from existing TTC stations AND all other proposed stops listed above. " +
-      "No stop may be a transfer to another stop on this same line. Output final route block.",
+      "No stop may be a transfer to another stop on this same line.",
       providerName,
-    )) { yield chunk; fullCom = full; }
+    )) { yield chunk; fullCom = full; if (route) routeCom = route; }
 
-    const routeFinal = extractRoute(fullCom) ?? routeReb ?? current;
+    const routeFinal = routeCom ?? routeReb ?? current;
     if (routeFinal) {
       let prScore: number | undefined;
       for (const src of [fullCom, fullPr]) {
