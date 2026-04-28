@@ -332,7 +332,7 @@ export default function LandingPage() {
       <div style={{ backgroundColor: isDark ? "#111827" : "#f8f7f4" }}>
 
         {/* ── 1. AI Council — split layout (mockup left, text right) ───────── */}
-        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "120px 64px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "120px clamp(20px, 5vw, 64px)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(400px, 100%), 1fr))", gap: 80, alignItems: "center" }}>
 
           {/* Dark mockup card — simulated council chat */}
           <div style={{ backgroundColor: "#111827", borderRadius: 28, padding: "28px 28px 20px", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
@@ -393,24 +393,24 @@ export default function LandingPage() {
         </section>
 
         {/* ── 2. Dark "Designed for every planner" card ────────────────────── */}
-        <section style={{ padding: "0 64px 120px", maxWidth: 1280, margin: "0 auto" }}>
-          <div style={{ backgroundColor: "#0f0e17", borderRadius: 32, padding: "80px 72px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 80, alignItems: "start" }}>
+        <section style={{ padding: "0 clamp(20px, 5vw, 64px) 120px", maxWidth: 1280, margin: "0 auto" }}>
+          <div style={{ backgroundColor: "#0f0e17", borderRadius: 32, padding: "clamp(40px, 6vw, 80px) clamp(20px, 5vw, 72px)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))", gap: 80, alignItems: "start" }}>
 
             {/* Left: headline + tag pills */}
             <div>
               <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(2.8rem, 5vw, 5rem)", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.035em", lineHeight: 1.0, marginBottom: 48 }}>
-                Designed for<br /><span style={{ color: "#818cf8" }}>every planner</span>
+                Built for<br /><span style={{ color: "#818cf8" }}>everyone</span>
               </h2>
               {/* 📖 Learn: these pill tags work like the "iPhone / Mac / Windows" pills in the Flow screenshot */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {[
-                  { label: "Urban Planners", active: true },
-                  { label: "Infrastructure Teams" },
-                  { label: "Researchers" },
+                  { label: "Enthusiasts", active: true },
                   { label: "Students" },
-                  { label: "City Officials" },
                   { label: "Advocates" },
-                  { label: "Developers" },
+                  { label: "Urban Planners" },
+                  { label: "Researchers" },
+                  { label: "City Officials" },
+                  { label: "Infrastructure Teams" },
                 ].map(({ label, active }) => (
                   <span key={label} style={{ padding: "8px 18px", borderRadius: 999, fontSize: 13.5, fontWeight: 500, backgroundColor: active ? "#ffffff" : "transparent", color: active ? "#0f0e17" : "rgba(255,255,255,0.55)", border: `1.5px solid ${active ? "#ffffff" : "rgba(255,255,255,0.2)"}` }}>
                     {label}
@@ -422,10 +422,10 @@ export default function LandingPage() {
             {/* Right: description for the active/highlighted tag */}
             <div style={{ paddingTop: 8 }}>
               <h3 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.5rem, 2.5vw, 2rem)", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.02em", marginBottom: 16 }}>
-                Transit Planner for Urban Planners
+                For everyone who&apos;s thought &ldquo;they should build a line here&rdquo;
               </h3>
               <p style={{ fontSize: 16, color: "rgba(255,255,255,0.58)", lineHeight: 1.8, marginBottom: 36 }}>
-                Sketch corridor concepts directly on a live map of Toronto's transit network. Draw any route, adjust stops, and let the AI council evaluate ridership, cost, and community impact — before you write a single report.
+                Draw the route you&apos;ve always imagined on a live map of Toronto&apos;s transit network. Drop stops, pick a line type, and watch an AI council debate whether it actually works — cost, ridership, and neighbourhood impact included.
               </p>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <Link href="/map" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 24px", borderRadius: 999, backgroundColor: "#ffffff", color: "#0f0e17", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
@@ -445,7 +445,7 @@ export default function LandingPage() {
 
         {/* ── 3. Staggered feature blocks ──────────────────────────────────── */}
         {/* Feature A: Draw any corridor */}
-        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 clamp(20px, 5vw, 64px) 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(400px, 100%), 1fr))", gap: 80, alignItems: "center" }}>
           {/* Mockup: simplified route drawing */}
           <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", display: "flex", flexDirection: "column", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
@@ -480,7 +480,7 @@ export default function LandingPage() {
         </section>
 
         {/* Feature B: GTFS (reversed — text left, mockup right) */}
-        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 clamp(20px, 5vw, 64px) 100px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(400px, 100%), 1fr))", gap: 80, alignItems: "center" }}>
           <div>
             <p style={{ fontSize: 11.5, fontWeight: 700, color: isDark ? "#22c55e" : "#16a34a", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>GTFS Round-Trip</p>
             <h2 style={{ fontFamily: '"Google Sans Display", Georgia, serif', fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 700, color: isDark ? "#ffffff" : "#0f0e17", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}>
@@ -523,7 +523,7 @@ export default function LandingPage() {
         </section>
 
         {/* Feature C: Population data */}
-        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 64px 120px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 80, alignItems: "center" }}>
+        <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 clamp(20px, 5vw, 64px) 120px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(400px, 100%), 1fr))", gap: 80, alignItems: "center" }}>
           {/* Mockup: population heatmap over stops */}
           <div style={{ backgroundColor: "#111827", borderRadius: 24, padding: 28, aspectRatio: "4/3", position: "relative", overflow: "hidden", border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 18 }}>
@@ -569,7 +569,7 @@ export default function LandingPage() {
             justifyContent: "center",
             overflow: "hidden",
             borderRadius: 40,
-            margin: "0 48px",
+            margin: "0 clamp(12px, 4vw, 48px)",
           }}
         >
           <div
@@ -633,7 +633,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 5. Footer — large brand text + links ─────────────────────────── */}
-        <footer style={{ borderTop: isDark ? "1px solid #374151" : "1px solid #e8e4dc", padding: "72px 64px 48px" }}>
+        <footer style={{ borderTop: isDark ? "1px solid #374151" : "1px solid #e8e4dc", padding: "72px clamp(20px, 5vw, 64px) 48px" }}>
           <div style={{ maxWidth: 1280, margin: "0 auto" }}>
             {/* Links row */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 40, marginBottom: 96 }}>

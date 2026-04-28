@@ -342,7 +342,7 @@ export function TransitMap() {
     councilHasRunRef.current = councilHasRun;
   }, [councilHasRun]);
 
-  function getAnalyticsContext(routeList: Route[] = routesRef.current) {
+function getAnalyticsContext(routeList: Route[] = routesRef.current) {
     return {
       ...getRouteMetrics(routeList),
       selected_neighbourhoods: selectedNeighbourhoodsRef.current.size,
@@ -3603,12 +3603,24 @@ export function TransitMap() {
                 if (r.stops.some((s) => s.name === name)) return r;
                 const newStop = { name, coords };
                 if (r.stops.length === 0) return { ...r, stops: [newStop] };
-                const first = r.stops[0]!;
-                const last = r.stops[r.stops.length - 1]!;
-                const dFirst = haversineKm(coords, first.coords);
-                const dLast  = haversineKm(coords, last.coords);
                 const roadSnapped = r.type === "bus" || r.type === "streetcar";
-                const newStops = dFirst < dLast ? [newStop, ...r.stops] : [...r.stops, newStop];
+                // 📖 Learn: "minimum detour" insertion — for each gap between
+                // consecutive stops, compute how much extra distance inserting here
+                // costs: d(i→new) + d(new→i+1) - d(i→i+1). Pick the cheapest gap.
+                // Also check prepending (before stop 0) and appending (after last stop).
+                let bestIdx = r.stops.length; // default: append
+                let bestCost = haversineKm(coords, r.stops[r.stops.length - 1]!.coords);
+                // check prepend
+                const prependCost = haversineKm(coords, r.stops[0]!.coords);
+                if (prependCost < bestCost) { bestIdx = 0; bestCost = prependCost; }
+                // check each interior gap
+                for (let i = 0; i < r.stops.length - 1; i++) {
+                  const a = r.stops[i]!.coords;
+                  const b = r.stops[i + 1]!.coords;
+                  const cost = haversineKm(coords, a) + haversineKm(coords, b) - haversineKm(a, b);
+                  if (cost < bestCost) { bestIdx = i + 1; bestCost = cost; }
+                }
+                const newStops = [...r.stops.slice(0, bestIdx), newStop, ...r.stops.slice(bestIdx)];
                 return { ...r, stops: newStops, shape: roadSnapped ? r.shape : undefined };
               }));
               setStationPopup(null);
