@@ -12,7 +12,7 @@ export default function VercelRedirectModal() {
       // and window.location.search gives the query string (?foo=bar).
       // We preserve both so the link lands on the same page at the new domain.
       const path = window.location.pathname + window.location.search;
-      setNewUrl("https://www.transitplan.xyz" + path);
+      setNewUrl("https://www.transitplanner.app" + path);
     }
   }, []);
 
