@@ -1460,15 +1460,6 @@ function getAnalyticsContext(routeList: Route[] = routesRef.current) {
     });
   }
 
-  // ── fetch and cache neighbourhoods GeoJSON for geometry lookups
-  useEffect(() => {
-    fetch("/Neighbourhoods - 4326.geojson")
-      .then((r) => r.json())
-      .then((data: GeoJSON.FeatureCollection) => { neighbourhoodsGeoJSONRef.current = data; })
-      .catch(console.error);
-  }, []);
-
-
   // ── init map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -1545,6 +1536,12 @@ function getAnalyticsContext(routeList: Route[] = routesRef.current) {
     // NavigationControl replaced by custom React panel below
     map.addControl(new mapboxgl.ScaleControl({ unit: imperial ? "imperial" : "metric" }), "bottom-left");
 
+    // 📖 Learn: fetch starts here (before map load) so it's already in-flight.
+    // When the load handler fires, we .then() onto the same promise instead of
+    // passing the URL string to addSource — avoiding a second network request.
+    const neighbourhoodFetch = fetch("/Neighbourhoods - 4326.geojson")
+      .then((r) => r.json() as Promise<GeoJSON.FeatureCollection>);
+
     map.on("load", () => {
       const firstLabelLayer = map
         .getStyle()
@@ -1553,15 +1550,17 @@ function getAnalyticsContext(routeList: Route[] = routesRef.current) {
         )?.id;
 
       // ── Neighbourhood fill/border layers (below routes)
-      map.addSource("neighbourhoods", {
-        type: "geojson",
-        data: "/Neighbourhoods - 4326.geojson",
-        promoteId: "AREA_SHORT_CODE",
-      });
+      void neighbourhoodFetch.then((neighbourhoodData: GeoJSON.FeatureCollection) => {
+        neighbourhoodsGeoJSONRef.current = neighbourhoodData;
+        map.addSource("neighbourhoods", {
+          type: "geojson",
+          data: neighbourhoodData,
+          promoteId: "AREA_SHORT_CODE",
+        });
 
-      map.addLayer(
-        {
-          id: "neighbourhood-fill",
+        map.addLayer(
+          {
+            id: "neighbourhood-fill",
           type: "fill",
           source: "neighbourhoods",
           paint: {
@@ -1674,8 +1673,9 @@ function getAnalyticsContext(routeList: Route[] = routesRef.current) {
         }
 
         // Stop propagation so route line clicks don't fire
-        e.preventDefault();
-      });
+          e.preventDefault();
+        });
+      }).catch(console.error);
 
       // 3D buildings
       map.addLayer(
@@ -2042,7 +2042,7 @@ function getAnalyticsContext(routeList: Route[] = routesRef.current) {
         }
 
         const stopLayers = (map.getStyle()?.layers ?? [])
-          .filter((l) => l.id.startsWith("stops-dot-"))
+          .filter((l) => l.id.startsWith("stops-dot-") || l.id === "bus-stops-dot")
           .map((l) => l.id);
         const hitStop = stopLayers.length > 0 && map.queryRenderedFeatures(e.point, { layers: stopLayers }).length > 0;
 
